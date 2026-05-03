@@ -1,0 +1,11 @@
+node_modules/
+.expo/
+dist/
+build/
+ios/
+android/
+*.env
+.env.local
+.DS_Store
+*.log
+.supabase/
