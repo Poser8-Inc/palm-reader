@@ -2,6 +2,7 @@ import * as ImageManipulator from 'expo-image-manipulator'
 import { useStore, type ReadingSection } from './store'
 
 const PALM_ORACLE_URL = process.env.EXPO_PUBLIC_PALM_ORACLE_URL
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
 
 export interface ReadingResult {
   heart_line: string
@@ -123,6 +124,9 @@ export async function readPalm(
   if (!PALM_ORACLE_URL) {
     throw new Error('EXPO_PUBLIC_PALM_ORACLE_URL is not set')
   }
+  if (!SUPABASE_ANON_KEY) {
+    throw new Error('EXPO_PUBLIC_SUPABASE_ANON_KEY is not set')
+  }
 
   setReadingStatus('loading')
 
@@ -141,6 +145,8 @@ export async function readPalm(
   const response = await fetch(PALM_ORACLE_URL, {
     method: 'POST',
     headers: {
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'apikey': SUPABASE_ANON_KEY,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ imageBase64, userId }),
