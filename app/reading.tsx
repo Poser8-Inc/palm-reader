@@ -186,7 +186,7 @@ export default function ReadingScreen() {
     hasStarted.current = true
 
     startReading()
-  }, [])
+  }, [capturedImageUri])
 
   // Scroll to bottom as sections stream in
   useEffect(() => {
@@ -212,32 +212,35 @@ export default function ReadingScreen() {
       // Decrement free reading count
       decrementReadings()
 
-      // Save to history
-      try {
-        const thumbnail = await createThumbnail(capturedImageUri)
-        const saved = await saveReading({
-          user_id: userId ?? 'anonymous',
-          image_url: null,
-          image_thumbnail: thumbnail,
-          heart_line: result.heart_line,
-          head_line: result.head_line,
-          life_line: result.life_line,
-          fate_line: result.fate_line,
-          mounts: result.mounts,
-          overall: result.overall,
-          raw_reading: result.raw,
-        })
-        if (saved) {
-          setActiveReading(saved)
-          addToHistory(saved)
+      // PALM-029: don't persist anonymous readings — they would orphan in DB
+      // (decision §3 in 01-DEFECT-QUEUE.md). Result screen still renders from in-memory state.
+      if (userId) {
+        try {
+          const thumbnail = await createThumbnail(capturedImageUri)
+          const saved = await saveReading({
+            user_id: userId,
+            image_url: null,
+            image_thumbnail: thumbnail,
+            heart_line: result.heart_line,
+            head_line: result.head_line,
+            life_line: result.life_line,
+            fate_line: result.fate_line,
+            mounts: result.mounts,
+            overall: result.overall,
+            raw_reading: result.raw,
+          })
+          if (saved) {
+            setActiveReading(saved)
+            addToHistory(saved)
+          }
+        } catch (saveErr) {
+          // Non-fatal: reading still displayed even if save fails
+          if (__DEV__) console.warn('[reading] Save failed:', saveErr)
         }
-      } catch (saveErr) {
-        // Non-fatal: reading still displayed even if save fails
-        console.warn('[reading] Save failed:', saveErr)
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Reading failed'
-      console.error('[reading] Error:', msg)
+      if (__DEV__) console.warn('[reading] Reading failed:', msg)
       setReadingError(msg)
       setReadingStatus('error')
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
