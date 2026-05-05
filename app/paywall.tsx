@@ -26,6 +26,7 @@ import Animated, {
 import Purchases, { type PurchasesPackage } from 'react-native-purchases'
 import { Colors, Spacing, BorderRadius, Typography } from '../constants/theme'
 import { useStore } from '../lib/store'
+import { log } from '../lib/log'
 
 const { width: W } = Dimensions.get('window')
 
@@ -93,7 +94,7 @@ export default function PaywallScreen() {
         ? process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY ?? ''
         : process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY ?? ''
       if (!key) {
-        if (__DEV__) console.warn('[rc][palm][paywall-init] RevenueCat key not set')
+        log.warn('[rc][palm][paywall-init] RevenueCat key not set')
         if (!cancelled) setOfferingsError('Pricing unavailable. Setup error — please reload the app.')
         return
       }
@@ -103,7 +104,7 @@ export default function PaywallScreen() {
       try {
         Purchases.configure({ apiKey: key })
       } catch (err) {
-        if (__DEV__) console.warn('[rc][palm][paywall-configure] Purchases.configure failed:', err)
+        log.warn('[rc][palm][paywall-configure] Purchases.configure failed:', err)
         if (!cancelled) setOfferingsError('Pricing unavailable. Setup error — please reload the app.')
         return
       }
@@ -126,20 +127,18 @@ export default function PaywallScreen() {
           }
         }
         if (Object.keys(pkgs).length === 0 && current.availablePackages.length > 0) {
-          if (__DEV__) {
-            console.warn(
-              '[rc][palm][paywall-offerings] RevenueCat returned packages but none matched expected IDs. ' +
-              'Got:', current.availablePackages.map(p => p.identifier),
-              '— expected one of: $rc_monthly, monthly, $rc_annual, annual'
-            )
-          }
+          log.warn(
+            '[rc][palm][paywall-offerings] RevenueCat returned packages but none matched expected IDs. ' +
+            'Got:', current.availablePackages.map(p => p.identifier),
+            '— expected one of: $rc_monthly, monthly, $rc_annual, annual'
+          )
           setOfferingsError('Pricing unavailable. Please contact support.')
           return
         }
         setPackages(pkgs)
       } catch (err) {
         if (cancelled) return
-        if (__DEV__) console.warn('[rc][palm][paywall-offerings] getOfferings failed:', err)
+        log.warn('[rc][palm][paywall-offerings] getOfferings failed:', err)
         setOfferingsError('Pricing unavailable. Check your connection and try again.')
       }
     }
@@ -167,7 +166,7 @@ export default function PaywallScreen() {
         // User cancelled — no alert needed
         return
       }
-      if (__DEV__) console.warn('[rc][palm][purchase] purchasePackage failed:', err)
+      log.warn('[rc][palm][purchase] purchasePackage failed:', err)
       Alert.alert('Purchase Failed', err.message ?? 'Something went wrong. Please try again.')
     } finally {
       setIsPurchasing(false)
@@ -187,7 +186,7 @@ export default function PaywallScreen() {
         Alert.alert('No Purchases Found', 'No previous purchases were found for this account.')
       }
     } catch (err: any) {
-      if (__DEV__) console.warn('[rc][palm][restore] restorePurchases failed:', err)
+      log.warn('[rc][palm][restore] restorePurchases failed:', err)
       Alert.alert('Restore Failed', err.message ?? 'Could not restore purchases.')
     } finally {
       setIsRestoring(false)

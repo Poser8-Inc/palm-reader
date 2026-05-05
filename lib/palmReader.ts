@@ -1,18 +1,19 @@
 import * as ImageManipulator from 'expo-image-manipulator'
 import { useStore, type ReadingSection } from './store'
+import { log } from './log'
 
 const PALM_ORACLE_URL = process.env.EXPO_PUBLIC_PALM_ORACLE_URL
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
 
 if (__DEV__) {
   if (!PALM_ORACLE_URL) {
-    console.warn(
+    log.warn(
       '[palmReader] EXPO_PUBLIC_PALM_ORACLE_URL is missing from the environment. ' +
       'The reading feature will fail at runtime. Check .env and rebuild.'
     )
   }
   if (!SUPABASE_ANON_KEY) {
-    console.warn(
+    log.warn(
       '[palmReader] EXPO_PUBLIC_SUPABASE_ANON_KEY is missing from the environment. ' +
       'The reading feature will fail at runtime. Check .env and rebuild.'
     )
@@ -31,7 +32,7 @@ export interface ReadingResult {
 
 // Optimize image: resize to 1024px max, convert to jpeg, return base64
 export async function optimizeImage(uri: string): Promise<string> {
-  console.log('[palmReader] Optimizing image:', uri)
+  log.debug('[palmReader] Optimizing image:', uri)
 
   const manipulated = await ImageManipulator.manipulateAsync(
     uri,
@@ -43,7 +44,7 @@ export async function optimizeImage(uri: string): Promise<string> {
     throw new Error('Image manipulation failed to produce base64')
   }
 
-  console.log('[palmReader] Image optimized, size:', Math.round(manipulated.base64.length / 1024), 'KB (base64)')
+  log.debug('[palmReader] Image optimized, size:', Math.round(manipulated.base64.length / 1024), 'KB (base64)')
   return manipulated.base64
 }
 
@@ -138,7 +139,7 @@ export async function readPalm(
 
   if (!PALM_ORACLE_URL || !SUPABASE_ANON_KEY) {
     const missing = !PALM_ORACLE_URL ? 'EXPO_PUBLIC_PALM_ORACLE_URL' : 'EXPO_PUBLIC_SUPABASE_ANON_KEY'
-    if (__DEV__) console.warn('[palmReader] Missing env var:', missing)
+    log.warn('[palmReader] Missing env var:', missing)
     throw new Error('Reading service is not configured. Please reinstall or contact support.')
   }
 
@@ -208,14 +209,12 @@ export async function readPalm(
         userMessage = 'Something went wrong reading your palm. Please try again.'
     }
 
-    if (__DEV__) {
-      console.warn(
-        '[palmReader] Palm Oracle error',
-        response.status,
-        serverCode ?? '(no code)',
-        serverError ?? '(no body)'
-      )
-    }
+    log.warn(
+      '[palmReader] Palm Oracle error',
+      response.status,
+      serverCode ?? '(no code)',
+      serverError ?? '(no body)'
+    )
 
     setReadingError(userMessage)
     setReadingStatus('error')

@@ -16,6 +16,7 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated'
 import { Colors, Spacing, BorderRadius, Typography } from '../constants/theme'
 import { useStore } from '../lib/store'
 import { getPastReadings, type Reading } from '../lib/supabase'
+import { log } from '../lib/log'
 
 function formatDate(iso: string): string {
   const d = new Date(iso)
@@ -160,7 +161,7 @@ export default function HistoryScreen() {
       const readings = await getPastReadings(userId ?? 'anonymous')
       setHistory(readings)
     } catch (err) {
-      console.error('[history] Load failed:', err)
+      log.error('[history] Load failed:', err)
     } finally {
       setLoading(false)
     }

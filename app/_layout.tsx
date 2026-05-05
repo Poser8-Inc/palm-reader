@@ -7,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { Platform } from 'react-native'
 import { Colors } from '../constants/theme'
 import Purchases, { LOG_LEVEL } from 'react-native-purchases'
+import { log } from '../lib/log'
 
 export default function RootLayout() {
   useEffect(() => {
@@ -18,7 +19,7 @@ export default function RootLayout() {
       try {
         Purchases.configure({ apiKey })
       } catch (err) {
-        if (__DEV__) console.warn('[rc][palm][configure] Purchases.configure failed:', err)
+        log.warn('[rc][palm][configure] Purchases.configure failed:', err)
       }
     }
   }, [])

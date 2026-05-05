@@ -28,6 +28,7 @@ import Animated, {
 import Purchases from 'react-native-purchases'
 import { Colors, Spacing, BorderRadius, Typography } from '../constants/theme'
 import { useStore } from '../lib/store'
+import { log } from '../lib/log'
 
 const { width: W, height: H } = Dimensions.get('window')
 
@@ -168,7 +169,7 @@ export default function CaptureScreen() {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       }
     } catch (err) {
-      console.error('[capture] takePicture error:', err)
+      log.error('[capture] takePicture error:', err)
       Alert.alert('Capture Failed', 'Please try again.')
     } finally {
       setIsCapturing(false)
@@ -185,7 +186,7 @@ export default function CaptureScreen() {
       // TODO(IAP-CONFIG-002): verify 'premium' is the entitlement ID in RevenueCat dashboard.
       isPremium = !!customerInfo.entitlements.active['premium']
     } catch (err) {
-      if (__DEV__) console.warn('[rc][palm][capture] getCustomerInfo failed:', err)
+      log.warn('[rc][palm][capture] getCustomerInfo failed:', err)
       // isPremium stays false (defensive). Don't reroute to paywall on transient RC errors —
       // free-tier counter-based gate below already enforces correct UX.
     }

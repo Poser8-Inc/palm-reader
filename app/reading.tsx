@@ -29,6 +29,7 @@ import { Colors, Spacing, BorderRadius, Typography } from '../constants/theme'
 import { useStore, type ReadingSection } from '../lib/store'
 import { readPalm, createThumbnail } from '../lib/palmReader'
 import { saveReading } from '../lib/supabase'
+import { log } from '../lib/log'
 
 const { width: W } = Dimensions.get('window')
 
@@ -235,12 +236,12 @@ export default function ReadingScreen() {
           }
         } catch (saveErr) {
           // Non-fatal: reading still displayed even if save fails
-          if (__DEV__) console.warn('[reading] Save failed:', saveErr)
+          log.warn('[reading] Save failed:', saveErr)
         }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Reading failed'
-      if (__DEV__) console.warn('[reading] Reading failed:', msg)
+      log.warn('[reading] Reading failed:', msg)
       setReadingError(msg)
       setReadingStatus('error')
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
