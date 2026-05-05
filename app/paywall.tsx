@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  Platform,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -22,14 +23,11 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated'
-import Purchases, { type PurchasesPackage, PURCHASES_ERROR_CODE } from 'react-native-purchases'
+import Purchases, { type PurchasesPackage } from 'react-native-purchases'
 import { Colors, Spacing, BorderRadius, Typography } from '../constants/theme'
 import { useStore } from '../lib/store'
 
 const { width: W } = Dimensions.get('window')
-
-const REVENUECAT_IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY ?? ''
-const REVENUECAT_ANDROID_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY ?? ''
 
 const FEATURES = [
   { emoji: '✦', label: 'Unlimited palm readings' },
@@ -91,8 +89,9 @@ export default function PaywallScreen() {
   useEffect(() => {
     let cancelled = false
     const init = async () => {
-      const Platform = require('react-native').Platform
-      const key = Platform.OS === 'ios' ? REVENUECAT_IOS_KEY : REVENUECAT_ANDROID_KEY
+      const key = Platform.OS === 'ios'
+        ? process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY ?? ''
+        : process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY ?? ''
       if (!key) {
         if (__DEV__) console.warn('[rc][palm][paywall-init] RevenueCat key not set')
         if (!cancelled) setOfferingsError('Pricing unavailable. Setup error — please reload the app.')
@@ -118,12 +117,24 @@ export default function PaywallScreen() {
         }
         const pkgs: typeof packages = {}
         for (const pkg of current.availablePackages) {
+          // TODO(IAP-CONFIG-001): consolidate to one ID after RevenueCat dashboard confirms canonical naming.
           if (pkg.identifier === '$rc_monthly' || pkg.identifier === 'monthly') {
             pkgs.monthly = pkg
           }
           if (pkg.identifier === '$rc_annual' || pkg.identifier === 'annual') {
             pkgs.annual = pkg
           }
+        }
+        if (Object.keys(pkgs).length === 0 && current.availablePackages.length > 0) {
+          if (__DEV__) {
+            console.warn(
+              '[rc][palm][paywall-offerings] RevenueCat returned packages but none matched expected IDs. ' +
+              'Got:', current.availablePackages.map(p => p.identifier),
+              '— expected one of: $rc_monthly, monthly, $rc_annual, annual'
+            )
+          }
+          setOfferingsError('Pricing unavailable. Please contact support.')
+          return
         }
         setPackages(pkgs)
       } catch (err) {
@@ -145,6 +156,7 @@ export default function PaywallScreen() {
     setIsPurchasing(true)
     try {
       const { customerInfo } = await Purchases.purchasePackage(pkg)
+      // TODO(IAP-CONFIG-002): verify 'premium' is the entitlement ID in RevenueCat dashboard.
       if (customerInfo.entitlements.active['premium']) {
         setPaywallVisible(false)
         router.replace('/')
@@ -166,6 +178,7 @@ export default function PaywallScreen() {
     setIsRestoring(true)
     try {
       const customerInfo = await Purchases.restorePurchases()
+      // TODO(IAP-CONFIG-002): verify 'premium' is the entitlement ID in RevenueCat dashboard.
       if (customerInfo.entitlements.active['premium']) {
         setPaywallVisible(false)
         router.replace('/')
