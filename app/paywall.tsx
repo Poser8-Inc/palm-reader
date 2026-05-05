@@ -86,23 +86,36 @@ export default function PaywallScreen() {
   }>({})
   const [isPurchasing, setIsPurchasing] = useState(false)
   const [isRestoring, setIsRestoring] = useState(false)
+  const [offeringsError, setOfferingsError] = useState<string | null>(null)
 
   useEffect(() => {
-    initRevenueCat()
-  }, [])
-
-  const initRevenueCat = async () => {
-    try {
+    let cancelled = false
+    const init = async () => {
       const Platform = require('react-native').Platform
       const key = Platform.OS === 'ios' ? REVENUECAT_IOS_KEY : REVENUECAT_ANDROID_KEY
       if (!key) {
-        console.warn('[paywall] RevenueCat key not set')
+        if (__DEV__) console.warn('[rc][palm][paywall-init] RevenueCat key not set')
+        if (!cancelled) setOfferingsError('Pricing unavailable. Setup error — please reload the app.')
         return
       }
-      Purchases.configure({ apiKey: key })
-      const offerings = await Purchases.getOfferings()
-      const current = offerings.current
-      if (current) {
+      // Re-configure defensively. RC SDK is idempotent on identical key; if _layout
+      // configure already succeeded this is a no-op. If _layout configure failed,
+      // this is the user's last line of defense.
+      try {
+        Purchases.configure({ apiKey: key })
+      } catch (err) {
+        if (__DEV__) console.warn('[rc][palm][paywall-configure] Purchases.configure failed:', err)
+        if (!cancelled) setOfferingsError('Pricing unavailable. Setup error — please reload the app.')
+        return
+      }
+      try {
+        const offerings = await Purchases.getOfferings()
+        if (cancelled) return
+        const current = offerings.current
+        if (!current) {
+          setOfferingsError('Pricing unavailable. Please try again in a moment.')
+          return
+        }
         const pkgs: typeof packages = {}
         for (const pkg of current.availablePackages) {
           if (pkg.identifier === '$rc_monthly' || pkg.identifier === 'monthly') {
@@ -113,11 +126,15 @@ export default function PaywallScreen() {
           }
         }
         setPackages(pkgs)
+      } catch (err) {
+        if (cancelled) return
+        if (__DEV__) console.warn('[rc][palm][paywall-offerings] getOfferings failed:', err)
+        setOfferingsError('Pricing unavailable. Check your connection and try again.')
       }
-    } catch (err) {
-      console.error('[paywall] RevenueCat init error:', err)
     }
-  }
+    init()
+    return () => { cancelled = true }
+  }, [])
 
   const handlePurchase = async () => {
     const pkg = selectedPlan === 'annual' ? packages.annual : packages.monthly
@@ -138,7 +155,7 @@ export default function PaywallScreen() {
         // User cancelled — no alert needed
         return
       }
-      console.error('[paywall] Purchase error:', err)
+      if (__DEV__) console.warn('[rc][palm][purchase] purchasePackage failed:', err)
       Alert.alert('Purchase Failed', err.message ?? 'Something went wrong. Please try again.')
     } finally {
       setIsPurchasing(false)
@@ -148,7 +165,7 @@ export default function PaywallScreen() {
   const handleRestore = async () => {
     setIsRestoring(true)
     try {
-      const { customerInfo } = await Purchases.restorePurchases()
+      const customerInfo = await Purchases.restorePurchases()
       if (customerInfo.entitlements.active['premium']) {
         setPaywallVisible(false)
         router.replace('/')
@@ -157,7 +174,7 @@ export default function PaywallScreen() {
         Alert.alert('No Purchases Found', 'No previous purchases were found for this account.')
       }
     } catch (err: any) {
-      console.error('[paywall] Restore error:', err)
+      if (__DEV__) console.warn('[rc][palm][restore] restorePurchases failed:', err)
       Alert.alert('Restore Failed', err.message ?? 'Could not restore purchases.')
     } finally {
       setIsRestoring(false)
@@ -169,11 +186,11 @@ export default function PaywallScreen() {
     router.back()
   }
 
-  const monthlyPrice = packages.monthly?.product.priceString ?? '$4.99'
-  const annualPrice = packages.annual?.product.priceString ?? '$29.99'
+  const monthlyPrice = packages.monthly?.product.priceString ?? '—'
+  const annualPrice = packages.annual?.product.priceString ?? '—'
   const annualMonthly = packages.annual
     ? `$${(packages.annual.product.price / 12).toFixed(2)}/mo`
-    : '$2.50/mo'
+    : '—'
 
   return (
     <SafeAreaView style={styles.container}>
@@ -201,6 +218,13 @@ export default function PaywallScreen() {
             </View>
           ))}
         </Animated.View>
+
+        {/* Offerings error banner */}
+        {offeringsError && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>{offeringsError}</Text>
+          </View>
+        )}
 
         {/* Plan selector */}
         <Animated.View entering={FadeInDown.delay(400)} style={styles.planBlock}>
@@ -251,16 +275,27 @@ export default function PaywallScreen() {
         {/* CTA */}
         <Animated.View entering={FadeInDown.delay(550)} style={styles.ctaBlock}>
           <TouchableOpacity
-            style={[styles.ctaBtn, isPurchasing && styles.ctaBtnLoading]}
+            style={[
+              styles.ctaBtn,
+              isPurchasing && styles.ctaBtnLoading,
+              (offeringsError !== null || !packages[selectedPlan]) && styles.ctaBtnLoading,
+            ]}
             onPress={handlePurchase}
-            disabled={isPurchasing || isRestoring}
+            disabled={
+              isPurchasing ||
+              isRestoring ||
+              offeringsError !== null ||
+              !packages[selectedPlan]
+            }
             activeOpacity={0.85}
           >
             {isPurchasing ? (
               <ActivityIndicator color={Colors.bg} />
             ) : (
               <Text style={styles.ctaBtnText}>
-                Get {selectedPlan === 'annual' ? annualPrice + '/year' : monthlyPrice + '/month'}
+                {packages[selectedPlan]
+                  ? `Get ${selectedPlan === 'annual' ? annualPrice + '/year' : monthlyPrice + '/month'}`
+                  : 'Pricing Unavailable'}
               </Text>
             )}
           </TouchableOpacity>
@@ -343,6 +378,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     gap: Spacing.md,
+  },
+  errorBanner: {
+    backgroundColor: 'rgba(220,80,80,0.12)',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(220,80,80,0.4)',
+  },
+  errorBannerText: {
+    ...Typography.bodySmall,
+    color: '#ffb3b3',
+    textAlign: 'center',
   },
   featureRow: {
     flexDirection: 'row',

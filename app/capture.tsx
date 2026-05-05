@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { CameraView, useCameraPermissions, type CameraType } from 'expo-camera'
 import * as ImagePicker from 'expo-image-picker'
 import * as Haptics from 'expo-haptics'
-import { Canvas, Path, Skia, Group } from '@shopify/react-native-skia'
+import { Canvas, Path, Skia, Group, DashPathEffect } from '@shopify/react-native-skia'
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -24,6 +24,7 @@ import Animated, {
   FadeOut,
   Easing,
 } from 'react-native-reanimated'
+import Purchases from 'react-native-purchases'
 import { Colors, Spacing, BorderRadius, Typography } from '../constants/theme'
 import { useStore } from '../lib/store'
 
@@ -98,8 +99,9 @@ function HandGuideOverlay() {
             strokeWidth={2}
             strokeCap="round"
             strokeJoin="round"
-            strokeDashArray={[8, 5]}
-          />
+          >
+            <DashPathEffect intervals={[8, 5]} />
+          </Path>
         </Canvas>
       </Animated.View>
     </View>
@@ -174,6 +176,24 @@ export default function CaptureScreen() {
 
   const handleUsePhoto = async () => {
     if (!capturedUri) return
+
+    // Check entitlement before proceeding to reading
+    let isPremium = false
+    try {
+      const customerInfo = await Purchases.getCustomerInfo()
+      isPremium = !!customerInfo.entitlements.active['premium']
+    } catch (err) {
+      if (__DEV__) console.warn('[rc][palm][capture] getCustomerInfo failed:', err)
+      // isPremium stays false (defensive). Don't reroute to paywall on transient RC errors —
+      // free-tier counter-based gate below already enforces correct UX.
+    }
+
+    const { readingsRemaining } = useStore.getState()
+    if (!isPremium && readingsRemaining <= 0) {
+      router.push('/paywall')
+      return
+    }
+
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     setCapturedImageUri(capturedUri)
     router.push('/reading')

@@ -4,9 +4,25 @@ import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
+import { Platform } from 'react-native'
 import { Colors } from '../constants/theme'
+import Purchases, { LOG_LEVEL } from 'react-native-purchases'
 
 export default function RootLayout() {
+  useEffect(() => {
+    const apiKey = Platform.OS === 'ios'
+      ? process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY ?? ''
+      : process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY ?? ''
+    if (apiKey) {
+      if (__DEV__) Purchases.setLogLevel(LOG_LEVEL.VERBOSE)
+      try {
+        Purchases.configure({ apiKey })
+      } catch (err) {
+        if (__DEV__) console.warn('[rc][palm][configure] Purchases.configure failed:', err)
+      }
+    }
+  }, [])
+
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: Colors.bg }}>
       <SafeAreaProvider>
