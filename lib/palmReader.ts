@@ -4,6 +4,21 @@ import { useStore, type ReadingSection } from './store'
 const PALM_ORACLE_URL = process.env.EXPO_PUBLIC_PALM_ORACLE_URL
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
 
+if (__DEV__) {
+  if (!PALM_ORACLE_URL) {
+    console.warn(
+      '[palmReader] EXPO_PUBLIC_PALM_ORACLE_URL is missing from the environment. ' +
+      'The reading feature will fail at runtime. Check .env and rebuild.'
+    )
+  }
+  if (!SUPABASE_ANON_KEY) {
+    console.warn(
+      '[palmReader] EXPO_PUBLIC_SUPABASE_ANON_KEY is missing from the environment. ' +
+      'The reading feature will fail at runtime. Check .env and rebuild.'
+    )
+  }
+}
+
 export interface ReadingResult {
   heart_line: string
   head_line: string
@@ -121,11 +136,10 @@ export async function readPalm(
 ): Promise<ReadingResult> {
   const { setReadingStatus, setReadingError, updateSection } = useStore.getState()
 
-  if (!PALM_ORACLE_URL) {
-    throw new Error('EXPO_PUBLIC_PALM_ORACLE_URL is not set')
-  }
-  if (!SUPABASE_ANON_KEY) {
-    throw new Error('EXPO_PUBLIC_SUPABASE_ANON_KEY is not set')
+  if (!PALM_ORACLE_URL || !SUPABASE_ANON_KEY) {
+    const missing = !PALM_ORACLE_URL ? 'EXPO_PUBLIC_PALM_ORACLE_URL' : 'EXPO_PUBLIC_SUPABASE_ANON_KEY'
+    if (__DEV__) console.warn('[palmReader] Missing env var:', missing)
+    throw new Error('Reading service is not configured. Please reinstall or contact support.')
   }
 
   setReadingStatus('loading')
@@ -135,6 +149,15 @@ export async function readPalm(
     imageBase64 = await optimizeImage(imageUri)
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Image optimization failed'
+    setReadingError(msg)
+    setReadingStatus('error')
+    throw new Error(msg)
+  }
+
+  // Match server-side limit at supabase/functions/palm-oracle/index.ts:90
+  const MAX_IMAGE_BASE64_BYTES = 5_500_000
+  if (imageBase64.length > MAX_IMAGE_BASE64_BYTES) {
+    const msg = 'Your photo is too large. Please try again with a smaller image.'
     setReadingError(msg)
     setReadingStatus('error')
     throw new Error(msg)
@@ -153,11 +176,50 @@ export async function readPalm(
   })
 
   if (!response.ok) {
-    const errText = await response.text().catch(() => 'Unknown error')
-    const msg = `Palm Oracle returned ${response.status}: ${errText}`
-    setReadingError(msg)
+    let serverCode: string | undefined
+    let serverError: string | undefined
+    try {
+      const ct = response.headers.get('content-type') ?? ''
+      if (ct.includes('application/json')) {
+        const errBody = await response.json()
+        serverCode = errBody?.code
+        serverError = errBody?.error
+      } else {
+        serverError = await response.text()
+      }
+    } catch {
+      // body parse failed — fall through with undefineds
+    }
+
+    let userMessage: string
+    switch (response.status) {
+      case 413:
+        userMessage = 'Your photo is too large. Please try again with a smaller image.'
+        break
+      case 402:
+        userMessage = 'You\'ve used your free readings. Upgrade to premium for unlimited.'
+        break
+      case 502:
+      case 503:
+      case 504:
+        userMessage = 'The reading service is temporarily unavailable. Please try again in a moment.'
+        break
+      default:
+        userMessage = 'Something went wrong reading your palm. Please try again.'
+    }
+
+    if (__DEV__) {
+      console.warn(
+        '[palmReader] Palm Oracle error',
+        response.status,
+        serverCode ?? '(no code)',
+        serverError ?? '(no body)'
+      )
+    }
+
+    setReadingError(userMessage)
     setReadingStatus('error')
-    throw new Error(msg)
+    throw new Error(userMessage)
   }
 
   if (!response.body) {
