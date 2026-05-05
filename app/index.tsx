@@ -9,7 +9,7 @@ import {
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Canvas, Path, Skia, Group, Paint, Circle, LinearGradient, vec } from '@shopify/react-native-skia'
+import { Canvas, Path, Skia, Group, Paint, Circle, LinearGradient, vec, DashPathEffect } from '@shopify/react-native-skia'
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -143,9 +143,10 @@ function PalmIllustration() {
         style="stroke"
         strokeWidth={1.5}
         strokeCap="round"
-        strokeDashArray={[4, 3]}
         opacity={0.65}
-      />
+      >
+        <DashPathEffect intervals={[4, 3]} />
+      </Path>
       {/* Mount dots */}
       <Circle cx={cx - 35} cy={cy - 5} r={3} color={Colors.primary} opacity={0.4} />
       <Circle cx={cx + 35} cy={cy} r={3} color={Colors.lines} opacity={0.4} />
