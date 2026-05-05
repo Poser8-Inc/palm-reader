@@ -7,6 +7,7 @@ import {
   Dimensions,
   Alert,
   Image,
+  ActivityIndicator,
 } from 'react-native'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -181,6 +182,7 @@ export default function CaptureScreen() {
     let isPremium = false
     try {
       const customerInfo = await Purchases.getCustomerInfo()
+      // TODO(IAP-CONFIG-002): verify 'premium' is the entitlement ID in RevenueCat dashboard.
       isPremium = !!customerInfo.entitlements.active['premium']
     } catch (err) {
       if (__DEV__) console.warn('[rc][palm][capture] getCustomerInfo failed:', err)
@@ -202,12 +204,21 @@ export default function CaptureScreen() {
   const handleRetake = () => {
     setCapturedUri(null)
     setMode('camera')
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
   }
 
   // Permission not yet determined
   if (!permission) {
-    return <View style={styles.container} />
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.permissionBlock}>
+          <ActivityIndicator color={Colors.primary} size="large" />
+          <Text style={[styles.permissionBody, { marginTop: Spacing.md }]}>
+            Checking camera permission…
+          </Text>
+        </View>
+      </SafeAreaView>
+    )
   }
 
   // Permission denied
