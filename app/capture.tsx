@@ -231,16 +231,28 @@ export default function CaptureScreen() {
           <Text style={styles.permissionBody}>
             Palm Reader needs your camera to photograph your palm for analysis.
           </Text>
-          <TouchableOpacity style={styles.permissionBtn} onPress={requestPermission}>
+          <TouchableOpacity
+            style={styles.permissionBtn}
+            onPress={requestPermission}
+            accessibilityRole="button"
+            accessibilityLabel="Grant camera access"
+          >
             <Text style={styles.permissionBtnText}>Grant Camera Access</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.permissionSecondary}
             onPress={handleLibraryPick}
+            accessibilityRole="button"
+            accessibilityLabel="Use photo library instead"
           >
             <Text style={styles.permissionSecondaryText}>Use Photo Library Instead</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backBtn}
+            accessibilityRole="link"
+            accessibilityLabel="Back"
+          >
             <Text style={styles.backBtnText}>← Back</Text>
           </TouchableOpacity>
         </View>
@@ -269,12 +281,20 @@ export default function CaptureScreen() {
         {/* Bottom actions */}
         <View style={styles.previewBottomOverlay}>
           <SafeAreaView style={styles.previewActions} edges={['bottom']}>
-            <TouchableOpacity style={styles.retakeBtn} onPress={handleRetake} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={styles.retakeBtn}
+              onPress={handleRetake}
+              accessibilityRole="button"
+              accessibilityLabel="Retake photo"
+              activeOpacity={0.8}
+            >
               <Text style={styles.retakeBtnText}>Retake</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.usePhotoBtn}
               onPress={handleUsePhoto}
+              accessibilityRole="button"
+              accessibilityLabel="Read my palm"
               activeOpacity={0.85}
             >
               <Text style={styles.usePhotoBtnText}>Read My Palm →</Text>
@@ -300,7 +320,12 @@ export default function CaptureScreen() {
 
       {/* Top instructions */}
       <SafeAreaView style={styles.topInstructions}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.closeBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Close camera"
+        >
           <Text style={styles.closeBtnText}>✕</Text>
         </TouchableOpacity>
         <View style={styles.instructionBox}>
@@ -316,7 +341,12 @@ export default function CaptureScreen() {
       <View style={styles.bottomControls}>
         <SafeAreaView style={styles.controlsRow} edges={['bottom']}>
           {/* Library picker */}
-          <TouchableOpacity style={styles.libraryBtn} onPress={handleLibraryPick}>
+          <TouchableOpacity
+            style={styles.libraryBtn}
+            onPress={handleLibraryPick}
+            accessibilityRole="button"
+            accessibilityLabel="Open photo library"
+          >
             <Text style={styles.libraryBtnText}>Library</Text>
           </TouchableOpacity>
 
@@ -325,6 +355,9 @@ export default function CaptureScreen() {
             style={[styles.shutter, isCapturing && styles.shutterActive]}
             onPress={handleCapture}
             disabled={isCapturing}
+            accessibilityRole="button"
+            accessibilityLabel="Capture photo"
+            accessibilityState={{ disabled: isCapturing }}
             activeOpacity={0.85}
           >
             <View style={styles.shutterInner} />

@@ -264,7 +264,12 @@ export default function ReadingScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleDone} style={styles.doneBtn}>
+        <TouchableOpacity
+          onPress={handleDone}
+          style={styles.doneBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Close reading"
+        >
           <Text style={styles.doneBtnText}>✕</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Palm Reading</Text>
@@ -313,7 +318,12 @@ export default function ReadingScreen() {
           <Animated.View entering={FadeIn} style={styles.errorBlock}>
             <Text style={styles.errorTitle}>Reading Failed</Text>
             <Text style={styles.errorBody}>{readingError}</Text>
-            <TouchableOpacity style={styles.retryBtn} onPress={handleRetry}>
+            <TouchableOpacity
+              style={styles.retryBtn}
+              onPress={handleRetry}
+              accessibilityRole="button"
+              accessibilityLabel="Try again"
+            >
               <Text style={styles.retryBtnText}>Try Again</Text>
             </TouchableOpacity>
           </Animated.View>
@@ -349,7 +359,13 @@ export default function ReadingScreen() {
             <Text style={styles.completeSubtext}>
               Saved to your history
             </Text>
-            <TouchableOpacity style={styles.newReadingBtn} onPress={handleDone} activeOpacity={0.85}>
+            <TouchableOpacity
+              style={styles.newReadingBtn}
+              onPress={handleDone}
+              accessibilityRole="button"
+              accessibilityLabel="Return home"
+              activeOpacity={0.85}
+            >
               <Text style={styles.newReadingBtnText}>Return Home</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -358,6 +374,8 @@ export default function ReadingScreen() {
                 resetReading()
                 router.replace('/history')
               }}
+              accessibilityRole="link"
+              accessibilityLabel="View past readings"
             >
               <Text style={styles.historyBtnText}>View Past Readings</Text>
             </TouchableOpacity>

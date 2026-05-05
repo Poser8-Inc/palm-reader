@@ -51,7 +51,12 @@ function ReadingDetailModal({
         {/* Modal header */}
         <View style={styles.modalHeader}>
           <Text style={styles.modalTitle}>Palm Reading</Text>
-          <TouchableOpacity onPress={onClose} style={styles.modalCloseBtn}>
+          <TouchableOpacity
+            onPress={onClose}
+            style={styles.modalCloseBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Close reading"
+          >
             <Text style={styles.modalCloseBtnText}>Done</Text>
           </TouchableOpacity>
         </View>
@@ -113,7 +118,13 @@ function HistoryCard({
 
   return (
     <Animated.View entering={FadeInDown.delay(index * 80)}>
-      <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}>
+      <TouchableOpacity
+        style={styles.card}
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`Open palm reading from ${formatDate(reading.created_at)}`}
+        activeOpacity={0.8}
+      >
         {reading.image_thumbnail ? (
           <Image
             source={{ uri: `data:image/jpeg;base64,${reading.image_thumbnail}` }}
@@ -171,7 +182,12 @@ export default function HistoryScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backBtn}
+          accessibilityRole="link"
+          accessibilityLabel="Back"
+        >
           <Text style={styles.backBtnText}>‹ Back</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Past Readings</Text>
@@ -190,7 +206,12 @@ export default function HistoryScreen() {
           <Text style={styles.emptyBody}>
             Photograph your palm and discover what the lines reveal about your life path.
           </Text>
-          <TouchableOpacity style={styles.emptyBtn} onPress={() => router.replace('/')}>
+          <TouchableOpacity
+            style={styles.emptyBtn}
+            onPress={() => router.replace('/')}
+            accessibilityRole="link"
+            accessibilityLabel="Get your first reading"
+          >
             <Text style={styles.emptyBtnText}>Get Your First Reading</Text>
           </TouchableOpacity>
         </Animated.View>
