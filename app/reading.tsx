@@ -260,6 +260,13 @@ export default function ReadingScreen() {
     startReading()
   }
 
+  // Without an image to read there's nothing to render — the useEffect above
+  // will redirect to '/'. Returning null here avoids the brief flash of the
+  // reading shell (header + empty scroll) before the redirect resolves.
+  if (!capturedImageUri) {
+    return null
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
