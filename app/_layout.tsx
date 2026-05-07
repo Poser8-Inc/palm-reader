@@ -15,7 +15,7 @@ export default function RootLayout() {
       ? process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY ?? ''
       : process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY ?? ''
     if (apiKey) {
-      if (__DEV__) Purchases.setLogLevel(LOG_LEVEL.VERBOSE)
+      if (__DEV__) Purchases.setLogLevel(LOG_LEVEL.WARN)
       try {
         Purchases.configure({ apiKey })
       } catch (err) {
