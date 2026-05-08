@@ -8,18 +8,34 @@
     "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "app.templari.palmreader",
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "app.templari.palmreader",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0A0B0F"
-      }
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "plugins": [
       "expo-router",
-      "expo-camera"
+      "expo-camera",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "1.9.25"
+          }
+        }
+      ],
+      "expo-secure-store"
     ],
     "icon": "./assets/icon.png",
     "splash": {
@@ -27,6 +43,15 @@
       "resizeMode": "contain",
       "backgroundColor": "#0A0B0F"
     },
-    "scheme": "palmreader"
+    "scheme": "palmreader",
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "8d6eeba4-df81-43ed-9118-901af731ddb2"
+      }
+    },
+    "owner": "poser8"
   }
 }

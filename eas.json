@@ -1,0 +1,36 @@
+{
+  "cli": {
+    "version": ">= 18.11.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview"
+    },
+    "production": {
+      "channel": "production",
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "6767143897",
+        "ascApiKeyPath": "/home/khoward/.openclaw/credentials/AuthKey_L37CHKQ6K7.p8",
+        "ascApiKeyId": "L37CHKQ6K7",
+        "ascApiKeyIssuerId": "644fbf15-356e-407e-b6d8-5418aaa98ef4",
+        "appleTeamId": "3JN6S5TS2X"
+      },
+      "android": {
+        "serviceAccountKeyPath": "/home/khoward/.openclaw/credentials/play-publisher-sa.json",
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
+    }
+  }
+}
