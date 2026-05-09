@@ -14,6 +14,16 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 })
 
+export async function getAccessToken(): Promise<string> {
+  const existing = await supabase.auth.getSession()
+  if (existing.data.session) return existing.data.session.access_token
+  const { data, error } = await supabase.auth.signInAnonymously()
+  if (error || !data.session) {
+    throw new Error('Authentication required to call the oracle.')
+  }
+  return data.session.access_token
+}
+
 // Database types
 export interface Reading {
   id: string

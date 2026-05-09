@@ -1,6 +1,7 @@
 import * as ImageManipulator from 'expo-image-manipulator'
 import { useStore, type ReadingSection } from './store'
 import { log } from './log'
+import { getAccessToken } from './supabase'
 
 const PALM_ORACLE_URL = process.env.EXPO_PUBLIC_PALM_ORACLE_URL
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
@@ -166,14 +167,18 @@ export async function readPalm(
 
   setReadingStatus('streaming')
 
+  const accessToken = await getAccessToken()
   const response = await fetch(PALM_ORACLE_URL, {
     method: 'POST',
+    // RN-specific: opt into response.body streaming on Android (off by default)
+    // @ts-ignore — reactNative is RN-only fetch option, not in fetch types
+    reactNative: { textStreaming: true },
     headers: {
-      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Authorization': `Bearer ${accessToken}`,
       'apikey': SUPABASE_ANON_KEY,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ imageBase64, userId }),
+    body: JSON.stringify({ imageBase64 }),
   })
 
   if (!response.ok) {
