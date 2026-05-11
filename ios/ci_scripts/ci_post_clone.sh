@@ -17,6 +17,20 @@ git config --global url."https://github.com/".insteadOf "http://github.com/"
 
 cd "$CI_PRIMARY_REPOSITORY_PATH"
 npm install --legacy-peer-deps --no-audit --no-fund
+
+# The `export CI=true` above only affects THIS shell. xcodebuild's
+# "Bundle React Native code and images" script phase later inherits the
+# original Apple env (CI=TRUE uppercase) and @expo/cli's getenv rejects
+# it ("GetEnv.NoBoolean: TRUE is not a boolean"). Inject a CI=true
+# override at the top of the RN bundle script wrapper so node @expo/cli
+# sees CI=true regardless of how xcodebuild forks the script phase.
+RN_XCODE_SCRIPT=node_modules/react-native/scripts/react-native-xcode.sh
+if [ -f "$RN_XCODE_SCRIPT" ]; then
+  echo "==> Forcing CI=true at top of $RN_XCODE_SCRIPT"
+  perl -i -pe 'print "export CI=true\n" if $. == 2 && !$done++' "$RN_XCODE_SCRIPT"
+  echo "    head of file now:"; head -4 "$RN_XCODE_SCRIPT"
+fi
+
 npx expo prebuild --platform ios --no-install --clean
 
 cd ios
