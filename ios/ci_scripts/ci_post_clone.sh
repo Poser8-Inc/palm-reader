@@ -31,9 +31,12 @@ pod install
 # the fmt headers post-install. constexpr is a strict superset (can run
 # at compile time OR runtime), so runtime behavior is unchanged.
 echo "==> Patching fmt headers: consteval -> constexpr"
+echo "    BEFORE: $(grep -rE '\bconsteval\b' Pods/fmt/include/ 2>/dev/null | wc -l) consteval occurrences"
+# perl regex \b works the same everywhere; BSD sed (macOS) doesn't support \b.
 find Pods/fmt -type f \( -name "*.h" -o -name "*.hpp" -o -name "*.cc" \) \
-  -exec sed -i '' 's/\bconsteval\b/constexpr/g' {} +
-echo "==> Verifying no consteval remaining in fmt headers"
-if grep -rn '\bconsteval\b' Pods/fmt/include/ 2>/dev/null; then
-  echo "WARNING: consteval still present in fmt headers after patch"
+  -exec perl -pi -e 's/\bconsteval\b/constexpr/g' {} +
+echo "    AFTER:  $(grep -rE '\bconsteval\b' Pods/fmt/include/ 2>/dev/null | wc -l) consteval occurrences"
+if grep -rnE '\bconsteval\b' Pods/fmt/include/ >/dev/null 2>&1; then
+  echo "    NOTE: consteval still present somewhere - patching may have missed a file"
+  grep -rnE '\bconsteval\b' Pods/fmt/include/ | head -20
 fi
