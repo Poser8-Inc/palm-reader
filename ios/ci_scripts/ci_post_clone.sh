@@ -29,13 +29,13 @@ from pathlib import Path
 p = Path("ios/Podfile")
 content = p.read_text()
 inject = (
-    "    # CI: disable fmt consteval (Xcode 26 + RN 0.76 incompat)\n"
+    "    # CI: disable fmt consteval (Xcode 26 + RN 0.76 incompat).\n"
+    "    # format-inl.h is header-only and instantiated in Hermes (the consumer),\n"
+    "    # so the macro must be set on every pod target, not just `fmt`.\n"
     "    installer.pods_project.targets.each do |t|\n"
-    "      if t.name == 'fmt'\n"
-    "        t.build_configurations.each do |c|\n"
-    "          c.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']\n"
-    "          c.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << 'FMT_USE_CONSTEVAL=0'\n"
-    "        end\n"
+    "      t.build_configurations.each do |c|\n"
+    "        c.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']\n"
+    "        c.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << 'FMT_USE_CONSTEVAL=0'\n"
     "      end\n"
     "    end\n"
 )
