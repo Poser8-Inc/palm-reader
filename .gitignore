@@ -1,7 +1,6 @@
 node_modules/
-ios/
+ios/*
 !ios/ci_scripts/
-!ios/ci_scripts/**
 android/
 .expo/
 .env
