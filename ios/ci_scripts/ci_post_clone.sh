@@ -19,34 +19,21 @@ cd "$CI_PRIMARY_REPOSITORY_PATH"
 npm install --legacy-peer-deps --no-audit --no-fund
 npx expo prebuild --platform ios --no-install --clean
 
-# Xcode 26's clang rejects fmt's consteval-based compile-time format-string
-# validation ("Call to consteval function ... is not a constant expression"
-# in fmt/format-inl.h). Hermes uses fmt internally; disabling consteval
-# validation leaves runtime behavior unchanged. Inject FMT_USE_CONSTEVAL=0
-# into the fmt pod via the generated Podfile's post_install hook.
-python3 - <<'PYEOF'
-from pathlib import Path
-p = Path("ios/Podfile")
-content = p.read_text()
-inject = (
-    "    # CI: disable fmt consteval (Xcode 26 + RN 0.76 incompat).\n"
-    "    # format-inl.h is header-only and instantiated in Hermes (the consumer),\n"
-    "    # so the macro must be set on every pod target, not just `fmt`.\n"
-    "    installer.pods_project.targets.each do |t|\n"
-    "      t.build_configurations.each do |c|\n"
-    "        c.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']\n"
-    "        c.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << 'FMT_USE_CONSTEVAL=0'\n"
-    "      end\n"
-    "    end\n"
-)
-marker = "post_install do |installer|\n"
-if marker in content:
-    content = content.replace(marker, marker + inject, 1)
-else:
-    content += "\npost_install do |installer|\n" + inject + "end\n"
-p.write_text(content)
-print("Patched Podfile with fmt consteval workaround")
-PYEOF
-
 cd ios
 pod install
+
+# Xcode 26's clang rejects fmt's consteval-based compile-time format-string
+# validation ("Call to consteval function ... is not a constant expression"
+# in fmt/format-inl.h). Builds 10/11/12 tried disabling this via the
+# FMT_USE_CONSTEVAL=0 macro at the Podfile level; the errors persisted,
+# suggesting the macro never reached the translation units instantiating
+# the templates. Going direct: replace `consteval` with `constexpr` in
+# the fmt headers post-install. constexpr is a strict superset (can run
+# at compile time OR runtime), so runtime behavior is unchanged.
+echo "==> Patching fmt headers: consteval -> constexpr"
+find Pods/fmt -type f \( -name "*.h" -o -name "*.hpp" -o -name "*.cc" \) \
+  -exec sed -i '' 's/\bconsteval\b/constexpr/g' {} +
+echo "==> Verifying no consteval remaining in fmt headers"
+if grep -rn '\bconsteval\b' Pods/fmt/include/ 2>/dev/null; then
+  echo "WARNING: consteval still present in fmt headers after patch"
+fi
