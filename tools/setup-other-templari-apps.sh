@@ -8,8 +8,8 @@ for app in aura graphology auspex aleph numerology; do
 echo
 echo "==== $app ===="
 cd "$ROOT/$app"
-git pull
 rm -f package-lock.json
+git pull
 npm install --legacy-peer-deps --no-audit --no-fund
 npx expo prebuild --platform ios --no-install --clean
 ( cd ios && pod install )
