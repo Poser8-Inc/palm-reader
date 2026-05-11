@@ -7,11 +7,11 @@
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
-      "bundleIdentifier": "com.poser8.palmreader",
+      "bundleIdentifier": "app.templari.palmreader",
       "supportsTablet": false
     },
     "android": {
-      "package": "com.poser8.palmreader"
+      "package": "app.templari.palmreader"
     },
     "plugins": [
       "expo-router",
