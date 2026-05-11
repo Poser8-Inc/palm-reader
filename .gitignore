@@ -1,6 +1,7 @@
 node_modules/
+ios/
+android/
 .expo/
-dist/
 .env
-.env.local
-*.lock
+*.tsbuildinfo
+.DS_Store
