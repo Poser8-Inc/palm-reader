@@ -8,6 +8,7 @@
     "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "app.templari.palmreader",
+      "buildNumber": "30",
       "supportsTablet": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
