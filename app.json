@@ -11,8 +11,8 @@
       "supportsTablet": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "Used to photograph your palm for reading.",
-        "NSPhotoLibraryUsageDescription": "Used to select a palm photo from your library for reading."
+        "NSCameraUsageDescription": "Palm Reader uses the camera to photograph the lines on your palm so we can identify and interpret the four major lines (Life, Head, Heart, Fate). For example, hold your dominant hand flat in front of the camera with your palm facing up.",
+        "NSPhotoLibraryUsageDescription": "Palm Reader can analyze an existing palm photograph from your photo library. For example, choose a clear photo of your dominant hand's palm and Palm Reader will identify the major lines."
       }
     },
     "android": {

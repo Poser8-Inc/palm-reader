@@ -235,9 +235,12 @@ export default function CaptureScreen() {
             style={styles.permissionBtn}
             onPress={requestPermission}
             accessibilityRole="button"
-            accessibilityLabel="Grant camera access"
+            accessibilityLabel="Continue to camera permission prompt"
           >
-            <Text style={styles.permissionBtnText}>Grant Camera Access</Text>
+            {/* App Review 5.1.1(iv): pre-prompt button must use neutral
+                language like "Continue" or "Next" — not "Grant Camera Access",
+                which is too leading. See submission af4698f4 (Palm v5). */}
+            <Text style={styles.permissionBtnText}>Continue</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.permissionSecondary}
