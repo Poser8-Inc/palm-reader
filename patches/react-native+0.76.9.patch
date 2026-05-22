@@ -1,23 +1,27 @@
 diff --git a/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm b/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm
-index 53b44e3..7095387 100644
+index 53b44e3..189519d 100644
 --- a/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm
 +++ b/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm
-@@ -420,7 +420,18 @@ void ObjCTurboModule::performVoidMethodInvocation(
+@@ -420,7 +420,22 @@ void ObjCTurboModule::performVoidMethodInvocation(
      @try {
        [inv invokeWithTarget:strongModule];
      } @catch (NSException *exception) {
 -      throw convertNSExceptionToJSError(runtime, exception, std::string{moduleName}, methodNameStr);
 +      if (shouldVoidMethodsExecuteSync_) {
-+        // We can only convert NSException to JSError in sync method calls.
-+        // See https://github.com/reactwg/react-native-new-architecture/discussions/276#discussioncomment-12567155
-+        // and facebook/react-native#54859 — async void methods need to @throw
-+        // because converting to a C++ JSError on the async dispatch queue has
-+        // no catcher (the queue is com.meta.react.turbomodulemanager.queue),
-+        // resulting in std::terminate → SIGABRT on iOS 26 where native modules
-+        // newly throw NSException during init.
++        // Sync void methods: the C++ throw propagates back through
++        // nativeMethodCallInvoker_->invokeSync to the caller, which can
++        // surface it as a JSError.
 +        throw convertNSExceptionToJSError(runtime, exception, std::string{moduleName}, methodNameStr);
 +      } else {
-+        @throw exception;
++        // Async void methods: the block runs on com.meta.react.turbomodulemanager.queue
++        // with no exception catcher upstream. Re-throwing here (C++ or @throw) escapes
++        // the dispatch block and calls std::terminate → SIGABRT before any JS runs.
++        // iOS 26 introduced new NSException paths during native module init
++        // (e.g. expo-secure-store without explicit keychainService); see
++        // facebook/react-native#54859. Log and swallow so the app launches and
++        // root-cause modules can be fixed at the call-site level.
++        NSLog(@"[RCTTurboModule] async void exception in %s.%s: %@ (swallowed to avoid SIGABRT)",
++              moduleName, methodNameStr.c_str(), exception);
 +      }
      } @finally {
        [retainedObjectsForInvocation removeAllObjects];
