@@ -25,6 +25,7 @@ import Animated, {
 import Purchases, { type PurchasesPackage, PURCHASES_ERROR_CODE } from 'react-native-purchases'
 import { Colors, Spacing, BorderRadius, Typography } from '../constants/theme'
 import { useStore } from '../lib/store'
+import { hasPremiumAccess } from '../lib/entitlements'
 
 const { width: W } = Dimensions.get('window')
 
@@ -128,7 +129,7 @@ export default function PaywallScreen() {
     setIsPurchasing(true)
     try {
       const { customerInfo } = await Purchases.purchasePackage(pkg)
-      if (customerInfo.entitlements.active['premium']) {
+      if (hasPremiumAccess(customerInfo)) {
         setPaywallVisible(false)
         router.replace('/')
         Alert.alert('Welcome to Premium!', 'You now have unlimited palm readings.')
@@ -149,7 +150,7 @@ export default function PaywallScreen() {
     setIsRestoring(true)
     try {
       const { customerInfo } = await Purchases.restorePurchases()
-      if (customerInfo.entitlements.active['premium']) {
+      if (hasPremiumAccess(customerInfo)) {
         setPaywallVisible(false)
         router.replace('/')
         Alert.alert('Purchases Restored', 'Your premium access has been restored.')
