@@ -1,7 +1,25 @@
 import * as ImageManipulator from 'expo-image-manipulator'
 import { useStore, type ReadingSection } from './store'
+import { log } from './log'
+import { getAccessToken } from './supabase'
 
 const PALM_ORACLE_URL = process.env.EXPO_PUBLIC_PALM_ORACLE_URL
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
+
+if (__DEV__) {
+  if (!PALM_ORACLE_URL) {
+    log.warn(
+      '[palmReader] EXPO_PUBLIC_PALM_ORACLE_URL is missing from the environment. ' +
+      'The reading feature will fail at runtime. Check .env and rebuild.'
+    )
+  }
+  if (!SUPABASE_ANON_KEY) {
+    log.warn(
+      '[palmReader] EXPO_PUBLIC_SUPABASE_ANON_KEY is missing from the environment. ' +
+      'The reading feature will fail at runtime. Check .env and rebuild.'
+    )
+  }
+}
 
 export interface ReadingResult {
   heart_line: string
@@ -15,7 +33,7 @@ export interface ReadingResult {
 
 // Optimize image: resize to 1024px max, convert to jpeg, return base64
 export async function optimizeImage(uri: string): Promise<string> {
-  console.log('[palmReader] Optimizing image:', uri)
+  log.debug('[palmReader] Optimizing image:', uri)
 
   const manipulated = await ImageManipulator.manipulateAsync(
     uri,
@@ -27,7 +45,7 @@ export async function optimizeImage(uri: string): Promise<string> {
     throw new Error('Image manipulation failed to produce base64')
   }
 
-  console.log('[palmReader] Image optimized, size:', Math.round(manipulated.base64.length / 1024), 'KB (base64)')
+  log.debug('[palmReader] Image optimized, size:', Math.round(manipulated.base64.length / 1024), 'KB (base64)')
   return manipulated.base64
 }
 
@@ -120,8 +138,10 @@ export async function readPalm(
 ): Promise<ReadingResult> {
   const { setReadingStatus, setReadingError, updateSection } = useStore.getState()
 
-  if (!PALM_ORACLE_URL) {
-    throw new Error('EXPO_PUBLIC_PALM_ORACLE_URL is not set')
+  if (!PALM_ORACLE_URL || !SUPABASE_ANON_KEY) {
+    const missing = !PALM_ORACLE_URL ? 'EXPO_PUBLIC_PALM_ORACLE_URL' : 'EXPO_PUBLIC_SUPABASE_ANON_KEY'
+    log.warn('[palmReader] Missing env var:', missing)
+    throw new Error('Reading service is not configured. Please reinstall or contact support.')
   }
 
   setReadingStatus('loading')
@@ -136,22 +156,74 @@ export async function readPalm(
     throw new Error(msg)
   }
 
-  setReadingStatus('streaming')
-
-  const response = await fetch(PALM_ORACLE_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ imageBase64, userId }),
-  })
-
-  if (!response.ok) {
-    const errText = await response.text().catch(() => 'Unknown error')
-    const msg = `Palm Oracle returned ${response.status}: ${errText}`
+  // Match server-side limit at supabase/functions/palm-oracle/index.ts:90
+  const MAX_IMAGE_BASE64_BYTES = 5_500_000
+  if (imageBase64.length > MAX_IMAGE_BASE64_BYTES) {
+    const msg = 'Your photo is too large. Please try again with a smaller image.'
     setReadingError(msg)
     setReadingStatus('error')
     throw new Error(msg)
+  }
+
+  setReadingStatus('streaming')
+
+  const accessToken = await getAccessToken()
+  const response = await fetch(PALM_ORACLE_URL, {
+    method: 'POST',
+    // RN-specific: opt into response.body streaming on Android (off by default)
+    // @ts-ignore — reactNative is RN-only fetch option, not in fetch types
+    reactNative: { textStreaming: true },
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'apikey': SUPABASE_ANON_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ imageBase64 }),
+  })
+
+  if (!response.ok) {
+    let serverCode: string | undefined
+    let serverError: string | undefined
+    try {
+      const ct = response.headers.get('content-type') ?? ''
+      if (ct.includes('application/json')) {
+        const errBody = await response.json()
+        serverCode = errBody?.code
+        serverError = errBody?.error
+      } else {
+        serverError = await response.text()
+      }
+    } catch {
+      // body parse failed — fall through with undefineds
+    }
+
+    let userMessage: string
+    switch (response.status) {
+      case 413:
+        userMessage = 'Your photo is too large. Please try again with a smaller image.'
+        break
+      case 402:
+        userMessage = 'You\'ve used your free readings. Upgrade to premium for unlimited.'
+        break
+      case 502:
+      case 503:
+      case 504:
+        userMessage = 'The reading service is temporarily unavailable. Please try again in a moment.'
+        break
+      default:
+        userMessage = 'Something went wrong reading your palm. Please try again.'
+    }
+
+    log.warn(
+      '[palmReader] Palm Oracle error',
+      response.status,
+      serverCode ?? '(no code)',
+      serverError ?? '(no body)'
+    )
+
+    setReadingError(userMessage)
+    setReadingStatus('error')
+    throw new Error(userMessage)
   }
 
   if (!response.body) {

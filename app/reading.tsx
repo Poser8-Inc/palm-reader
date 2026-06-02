@@ -29,6 +29,7 @@ import { Colors, Spacing, BorderRadius, Typography } from '../constants/theme'
 import { useStore, type ReadingSection } from '../lib/store'
 import { readPalm, createThumbnail } from '../lib/palmReader'
 import { saveReading } from '../lib/supabase'
+import { log } from '../lib/log'
 
 const { width: W } = Dimensions.get('window')
 
@@ -186,7 +187,7 @@ export default function ReadingScreen() {
     hasStarted.current = true
 
     startReading()
-  }, [])
+  }, [capturedImageUri])
 
   // Scroll to bottom as sections stream in
   useEffect(() => {
@@ -212,32 +213,35 @@ export default function ReadingScreen() {
       // Decrement free reading count
       decrementReadings()
 
-      // Save to history
-      try {
-        const thumbnail = await createThumbnail(capturedImageUri)
-        const saved = await saveReading({
-          user_id: userId ?? 'anonymous',
-          image_url: null,
-          image_thumbnail: thumbnail,
-          heart_line: result.heart_line,
-          head_line: result.head_line,
-          life_line: result.life_line,
-          fate_line: result.fate_line,
-          mounts: result.mounts,
-          overall: result.overall,
-          raw_reading: result.raw,
-        })
-        if (saved) {
-          setActiveReading(saved)
-          addToHistory(saved)
+      // PALM-029: don't persist anonymous readings — they would orphan in DB
+      // (decision §3 in 01-DEFECT-QUEUE.md). Result screen still renders from in-memory state.
+      if (userId) {
+        try {
+          const thumbnail = await createThumbnail(capturedImageUri)
+          const saved = await saveReading({
+            user_id: userId,
+            image_url: null,
+            image_thumbnail: thumbnail,
+            heart_line: result.heart_line,
+            head_line: result.head_line,
+            life_line: result.life_line,
+            fate_line: result.fate_line,
+            mounts: result.mounts,
+            overall: result.overall,
+            raw_reading: result.raw,
+          })
+          if (saved) {
+            setActiveReading(saved)
+            addToHistory(saved)
+          }
+        } catch (saveErr) {
+          // Non-fatal: reading still displayed even if save fails
+          log.warn('[reading] Save failed:', saveErr)
         }
-      } catch (saveErr) {
-        // Non-fatal: reading still displayed even if save fails
-        console.warn('[reading] Save failed:', saveErr)
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Reading failed'
-      console.error('[reading] Error:', msg)
+      log.warn('[reading] Reading failed:', msg)
       setReadingError(msg)
       setReadingStatus('error')
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
@@ -256,11 +260,23 @@ export default function ReadingScreen() {
     startReading()
   }
 
+  // Without an image to read there's nothing to render — the useEffect above
+  // will redirect to '/'. Returning null here avoids the brief flash of the
+  // reading shell (header + empty scroll) before the redirect resolves.
+  if (!capturedImageUri) {
+    return null
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleDone} style={styles.doneBtn}>
+        <TouchableOpacity
+          onPress={handleDone}
+          style={styles.doneBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Close reading"
+        >
           <Text style={styles.doneBtnText}>✕</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Palm Reading</Text>
@@ -309,7 +325,12 @@ export default function ReadingScreen() {
           <Animated.View entering={FadeIn} style={styles.errorBlock}>
             <Text style={styles.errorTitle}>Reading Failed</Text>
             <Text style={styles.errorBody}>{readingError}</Text>
-            <TouchableOpacity style={styles.retryBtn} onPress={handleRetry}>
+            <TouchableOpacity
+              style={styles.retryBtn}
+              onPress={handleRetry}
+              accessibilityRole="button"
+              accessibilityLabel="Try again"
+            >
               <Text style={styles.retryBtnText}>Try Again</Text>
             </TouchableOpacity>
           </Animated.View>
@@ -345,7 +366,13 @@ export default function ReadingScreen() {
             <Text style={styles.completeSubtext}>
               Saved to your history
             </Text>
-            <TouchableOpacity style={styles.newReadingBtn} onPress={handleDone} activeOpacity={0.85}>
+            <TouchableOpacity
+              style={styles.newReadingBtn}
+              onPress={handleDone}
+              accessibilityRole="button"
+              accessibilityLabel="Return home"
+              activeOpacity={0.85}
+            >
               <Text style={styles.newReadingBtnText}>Return Home</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -354,6 +381,8 @@ export default function ReadingScreen() {
                 resetReading()
                 router.replace('/history')
               }}
+              accessibilityRole="link"
+              accessibilityLabel="View past readings"
             >
               <Text style={styles.historyBtnText}>View Past Readings</Text>
             </TouchableOpacity>

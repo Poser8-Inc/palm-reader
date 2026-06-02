@@ -9,7 +9,7 @@ import {
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Canvas, Path, Skia, Group, Paint, Circle, LinearGradient, vec } from '@shopify/react-native-skia'
+import { Canvas, Path, Skia, Group, Paint, Circle, LinearGradient, vec, DashPathEffect } from '@shopify/react-native-skia'
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -143,9 +143,10 @@ function PalmIllustration() {
         style="stroke"
         strokeWidth={1.5}
         strokeCap="round"
-        strokeDashArray={[4, 3]}
         opacity={0.65}
-      />
+      >
+        <DashPathEffect intervals={[4, 3]} />
+      </Path>
       {/* Mount dots */}
       <Circle cx={cx - 35} cy={cy - 5} r={3} color={Colors.primary} opacity={0.4} />
       <Circle cx={cx + 35} cy={cy} r={3} color={Colors.lines} opacity={0.4} />
@@ -204,6 +205,8 @@ export default function HomeScreen() {
           <TouchableOpacity
             onPress={() => router.push('/history')}
             style={styles.historyBtn}
+            accessibilityRole="link"
+            accessibilityLabel="Past readings"
           >
             <Text style={styles.historyBtnText}>History</Text>
           </TouchableOpacity>
@@ -228,11 +231,23 @@ export default function HomeScreen() {
 
         {/* CTA Buttons */}
         <Animated.View entering={FadeInDown.delay(500)} style={styles.buttonBlock}>
-          <TouchableOpacity style={styles.primaryButton} onPress={handleCamera} activeOpacity={0.85}>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={handleCamera}
+            accessibilityRole="button"
+            accessibilityLabel="Photograph my palm"
+            activeOpacity={0.85}
+          >
             <Text style={styles.primaryButtonText}>Photograph My Palm</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.secondaryButton} onPress={handleLibrary} activeOpacity={0.8}>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={handleLibrary}
+            accessibilityRole="button"
+            accessibilityLabel="Upload palm photo from library"
+            activeOpacity={0.8}
+          >
             <Text style={styles.secondaryButtonText}>Upload from Library</Text>
           </TouchableOpacity>
         </Animated.View>
@@ -247,6 +262,8 @@ export default function HomeScreen() {
             <TouchableOpacity
               onPress={() => router.push('/paywall')}
               style={styles.freeCounter}
+              accessibilityRole="link"
+              accessibilityLabel={`${readingsRemaining} reading${readingsRemaining !== 1 ? 's' : ''} remaining, upgrade for unlimited`}
               activeOpacity={0.8}
             >
               <Text style={styles.freeCounterText}>
