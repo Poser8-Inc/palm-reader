@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  Platform,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -22,15 +23,13 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated'
-import Purchases, { type PurchasesPackage, PURCHASES_ERROR_CODE } from 'react-native-purchases'
+import Purchases, { type PurchasesPackage } from 'react-native-purchases'
 import { Colors, Spacing, BorderRadius, Typography } from '../constants/theme'
 import { useStore } from '../lib/store'
+import { log } from '../lib/log'
 import { hasPremiumAccess } from '../lib/entitlements'
 
 const { width: W } = Dimensions.get('window')
-
-const REVENUECAT_IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY ?? ''
-const REVENUECAT_ANDROID_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY ?? ''
 
 const FEATURES = [
   { emoji: '✦', label: 'Unlimited palm readings' },
@@ -87,25 +86,40 @@ export default function PaywallScreen() {
   }>({})
   const [isPurchasing, setIsPurchasing] = useState(false)
   const [isRestoring, setIsRestoring] = useState(false)
+  const [offeringsError, setOfferingsError] = useState<string | null>(null)
 
   useEffect(() => {
-    initRevenueCat()
-  }, [])
-
-  const initRevenueCat = async () => {
-    try {
-      const Platform = require('react-native').Platform
-      const key = Platform.OS === 'ios' ? REVENUECAT_IOS_KEY : REVENUECAT_ANDROID_KEY
+    let cancelled = false
+    const init = async () => {
+      const key = Platform.OS === 'ios'
+        ? process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY ?? ''
+        : process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY ?? ''
       if (!key) {
-        console.warn('[paywall] RevenueCat key not set')
+        log.warn('[rc][palm][paywall-init] RevenueCat key not set')
+        if (!cancelled) setOfferingsError('Pricing unavailable. Setup error — please reload the app.')
         return
       }
-      Purchases.configure({ apiKey: key })
-      const offerings = await Purchases.getOfferings()
-      const current = offerings.current
-      if (current) {
+      // Re-configure defensively. RC SDK is idempotent on identical key; if _layout
+      // configure already succeeded this is a no-op. If _layout configure failed,
+      // this is the user's last line of defense.
+      try {
+        Purchases.configure({ apiKey: key })
+      } catch (err) {
+        log.warn('[rc][palm][paywall-configure] Purchases.configure failed:', err)
+        if (!cancelled) setOfferingsError('Pricing unavailable. Setup error — please reload the app.')
+        return
+      }
+      try {
+        const offerings = await Purchases.getOfferings()
+        if (cancelled) return
+        const current = offerings.current
+        if (!current) {
+          setOfferingsError('Pricing unavailable. Please try again in a moment.')
+          return
+        }
         const pkgs: typeof packages = {}
         for (const pkg of current.availablePackages) {
+          // TODO(IAP-CONFIG-001): consolidate to one ID after RevenueCat dashboard confirms canonical naming.
           if (pkg.identifier === '$rc_monthly' || pkg.identifier === 'monthly') {
             pkgs.monthly = pkg
           }
@@ -113,12 +127,25 @@ export default function PaywallScreen() {
             pkgs.annual = pkg
           }
         }
+        if (Object.keys(pkgs).length === 0 && current.availablePackages.length > 0) {
+          log.warn(
+            '[rc][palm][paywall-offerings] RevenueCat returned packages but none matched expected IDs. ' +
+            'Got:', current.availablePackages.map(p => p.identifier),
+            '— expected one of: $rc_monthly, monthly, $rc_annual, annual'
+          )
+          setOfferingsError('Pricing unavailable. Please contact support.')
+          return
+        }
         setPackages(pkgs)
+      } catch (err) {
+        if (cancelled) return
+        log.warn('[rc][palm][paywall-offerings] getOfferings failed:', err)
+        setOfferingsError('Pricing unavailable. Check your connection and try again.')
       }
-    } catch (err) {
-      console.error('[paywall] RevenueCat init error:', err)
     }
-  }
+    init()
+    return () => { cancelled = true }
+  }, [])
 
   const handlePurchase = async () => {
     const pkg = selectedPlan === 'annual' ? packages.annual : packages.monthly
@@ -139,7 +166,7 @@ export default function PaywallScreen() {
         // User cancelled — no alert needed
         return
       }
-      console.error('[paywall] Purchase error:', err)
+      log.warn('[rc][palm][purchase] purchasePackage failed:', err)
       Alert.alert('Purchase Failed', err.message ?? 'Something went wrong. Please try again.')
     } finally {
       setIsPurchasing(false)
@@ -158,7 +185,7 @@ export default function PaywallScreen() {
         Alert.alert('No Purchases Found', 'No previous purchases were found for this account.')
       }
     } catch (err: any) {
-      console.error('[paywall] Restore error:', err)
+      log.warn('[rc][palm][restore] restorePurchases failed:', err)
       Alert.alert('Restore Failed', err.message ?? 'Could not restore purchases.')
     } finally {
       setIsRestoring(false)
@@ -170,16 +197,21 @@ export default function PaywallScreen() {
     router.back()
   }
 
-  const monthlyPrice = packages.monthly?.product.priceString ?? '$4.99'
-  const annualPrice = packages.annual?.product.priceString ?? '$29.99'
+  const monthlyPrice = packages.monthly?.product.priceString ?? '—'
+  const annualPrice = packages.annual?.product.priceString ?? '—'
   const annualMonthly = packages.annual
     ? `$${(packages.annual.product.price / 12).toFixed(2)}/mo`
-    : '$2.50/mo'
+    : '—'
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Close button */}
-      <TouchableOpacity style={styles.closeBtn} onPress={handleClose}>
+      <TouchableOpacity
+        style={styles.closeBtn}
+        onPress={handleClose}
+        accessibilityRole="button"
+        accessibilityLabel="Close paywall"
+      >
         <Text style={styles.closeBtnText}>✕</Text>
       </TouchableOpacity>
 
@@ -203,12 +235,22 @@ export default function PaywallScreen() {
           ))}
         </Animated.View>
 
+        {/* Offerings error banner */}
+        {offeringsError && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>{offeringsError}</Text>
+          </View>
+        )}
+
         {/* Plan selector */}
         <Animated.View entering={FadeInDown.delay(400)} style={styles.planBlock}>
           {/* Annual */}
           <TouchableOpacity
             style={[styles.planCard, selectedPlan === 'annual' && styles.planCardSelected]}
             onPress={() => setSelectedPlan('annual')}
+            accessibilityRole="button"
+            accessibilityLabel={`Select annual plan, ${annualMonthly} billed ${annualPrice} per year`}
+            accessibilityState={{ selected: selectedPlan === 'annual' }}
             activeOpacity={0.8}
           >
             <View style={styles.planCardLeft}>
@@ -233,6 +275,9 @@ export default function PaywallScreen() {
           <TouchableOpacity
             style={[styles.planCard, selectedPlan === 'monthly' && styles.planCardSelected]}
             onPress={() => setSelectedPlan('monthly')}
+            accessibilityRole="button"
+            accessibilityLabel={`Select monthly plan, ${monthlyPrice} per month`}
+            accessibilityState={{ selected: selectedPlan === 'monthly' }}
             activeOpacity={0.8}
           >
             <View style={styles.planCardLeft}>
@@ -252,16 +297,30 @@ export default function PaywallScreen() {
         {/* CTA */}
         <Animated.View entering={FadeInDown.delay(550)} style={styles.ctaBlock}>
           <TouchableOpacity
-            style={[styles.ctaBtn, isPurchasing && styles.ctaBtnLoading]}
+            style={[
+              styles.ctaBtn,
+              isPurchasing && styles.ctaBtnLoading,
+              (offeringsError !== null || !packages[selectedPlan]) && styles.ctaBtnLoading,
+            ]}
             onPress={handlePurchase}
-            disabled={isPurchasing || isRestoring}
+            disabled={
+              isPurchasing ||
+              isRestoring ||
+              offeringsError !== null ||
+              !packages[selectedPlan]
+            }
+            accessibilityRole="button"
+            accessibilityLabel="Unlock unlimited readings"
+            accessibilityState={{ disabled: isPurchasing || isRestoring || offeringsError !== null || !packages[selectedPlan] }}
             activeOpacity={0.85}
           >
             {isPurchasing ? (
               <ActivityIndicator color={Colors.bg} />
             ) : (
               <Text style={styles.ctaBtnText}>
-                Get {selectedPlan === 'annual' ? annualPrice + '/year' : monthlyPrice + '/month'}
+                {packages[selectedPlan]
+                  ? `Get ${selectedPlan === 'annual' ? annualPrice + '/year' : monthlyPrice + '/month'}`
+                  : 'Pricing Unavailable'}
               </Text>
             )}
           </TouchableOpacity>
@@ -270,6 +329,9 @@ export default function PaywallScreen() {
             style={styles.restoreBtn}
             onPress={handleRestore}
             disabled={isPurchasing || isRestoring}
+            accessibilityRole="button"
+            accessibilityLabel="Restore purchases"
+            accessibilityState={{ disabled: isPurchasing || isRestoring }}
           >
             {isRestoring ? (
               <ActivityIndicator color={Colors.textMuted} size="small" />
@@ -344,6 +406,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     gap: Spacing.md,
+  },
+  errorBanner: {
+    backgroundColor: 'rgba(220,80,80,0.12)',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(220,80,80,0.4)',
+  },
+  errorBannerText: {
+    ...Typography.bodySmall,
+    color: '#ffb3b3',
+    textAlign: 'center',
   },
   featureRow: {
     flexDirection: 'row',

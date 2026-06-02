@@ -7,13 +7,14 @@ import {
   Dimensions,
   Alert,
   Image,
+  ActivityIndicator,
 } from 'react-native'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { CameraView, useCameraPermissions, type CameraType } from 'expo-camera'
 import * as ImagePicker from 'expo-image-picker'
 import * as Haptics from 'expo-haptics'
-import { Canvas, Path, Skia, Group } from '@shopify/react-native-skia'
+import { Canvas, Path, Skia, Group, DashPathEffect } from '@shopify/react-native-skia'
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -24,8 +25,10 @@ import Animated, {
   FadeOut,
   Easing,
 } from 'react-native-reanimated'
+import Purchases from 'react-native-purchases'
 import { Colors, Spacing, BorderRadius, Typography } from '../constants/theme'
 import { useStore } from '../lib/store'
+import { log } from '../lib/log'
 
 const { width: W, height: H } = Dimensions.get('window')
 
@@ -98,8 +101,9 @@ function HandGuideOverlay() {
             strokeWidth={2}
             strokeCap="round"
             strokeJoin="round"
-            strokeDashArray={[8, 5]}
-          />
+          >
+            <DashPathEffect intervals={[8, 5]} />
+          </Path>
         </Canvas>
       </Animated.View>
     </View>
@@ -165,7 +169,7 @@ export default function CaptureScreen() {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       }
     } catch (err) {
-      console.error('[capture] takePicture error:', err)
+      log.error('[capture] takePicture error:', err)
       Alert.alert('Capture Failed', 'Please try again.')
     } finally {
       setIsCapturing(false)
@@ -174,6 +178,25 @@ export default function CaptureScreen() {
 
   const handleUsePhoto = async () => {
     if (!capturedUri) return
+
+    // Check entitlement before proceeding to reading
+    let isPremium = false
+    try {
+      const customerInfo = await Purchases.getCustomerInfo()
+      // TODO(IAP-CONFIG-002): verify 'premium' is the entitlement ID in RevenueCat dashboard.
+      isPremium = !!customerInfo.entitlements.active['premium']
+    } catch (err) {
+      log.warn('[rc][palm][capture] getCustomerInfo failed:', err)
+      // isPremium stays false (defensive). Don't reroute to paywall on transient RC errors —
+      // free-tier counter-based gate below already enforces correct UX.
+    }
+
+    const { readingsRemaining } = useStore.getState()
+    if (!isPremium && readingsRemaining <= 0) {
+      router.push('/paywall')
+      return
+    }
+
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     setCapturedImageUri(capturedUri)
     router.push('/reading')
@@ -182,12 +205,21 @@ export default function CaptureScreen() {
   const handleRetake = () => {
     setCapturedUri(null)
     setMode('camera')
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
   }
 
   // Permission not yet determined
   if (!permission) {
-    return <View style={styles.container} />
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.permissionBlock}>
+          <ActivityIndicator color={Colors.primary} size="large" />
+          <Text style={[styles.permissionBody, { marginTop: Spacing.md }]}>
+            Checking camera permission…
+          </Text>
+        </View>
+      </SafeAreaView>
+    )
   }
 
   // Permission denied
@@ -199,16 +231,28 @@ export default function CaptureScreen() {
           <Text style={styles.permissionBody}>
             Palm Reader needs your camera to photograph your palm for analysis.
           </Text>
-          <TouchableOpacity style={styles.permissionBtn} onPress={requestPermission}>
+          <TouchableOpacity
+            style={styles.permissionBtn}
+            onPress={requestPermission}
+            accessibilityRole="button"
+            accessibilityLabel="Grant camera access"
+          >
             <Text style={styles.permissionBtnText}>Grant Camera Access</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.permissionSecondary}
             onPress={handleLibraryPick}
+            accessibilityRole="button"
+            accessibilityLabel="Use photo library instead"
           >
             <Text style={styles.permissionSecondaryText}>Use Photo Library Instead</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backBtn}
+            accessibilityRole="link"
+            accessibilityLabel="Back"
+          >
             <Text style={styles.backBtnText}>← Back</Text>
           </TouchableOpacity>
         </View>
@@ -237,12 +281,20 @@ export default function CaptureScreen() {
         {/* Bottom actions */}
         <View style={styles.previewBottomOverlay}>
           <SafeAreaView style={styles.previewActions} edges={['bottom']}>
-            <TouchableOpacity style={styles.retakeBtn} onPress={handleRetake} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={styles.retakeBtn}
+              onPress={handleRetake}
+              accessibilityRole="button"
+              accessibilityLabel="Retake photo"
+              activeOpacity={0.8}
+            >
               <Text style={styles.retakeBtnText}>Retake</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.usePhotoBtn}
               onPress={handleUsePhoto}
+              accessibilityRole="button"
+              accessibilityLabel="Read my palm"
               activeOpacity={0.85}
             >
               <Text style={styles.usePhotoBtnText}>Read My Palm →</Text>
@@ -268,7 +320,12 @@ export default function CaptureScreen() {
 
       {/* Top instructions */}
       <SafeAreaView style={styles.topInstructions}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.closeBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Close camera"
+        >
           <Text style={styles.closeBtnText}>✕</Text>
         </TouchableOpacity>
         <View style={styles.instructionBox}>
@@ -284,7 +341,12 @@ export default function CaptureScreen() {
       <View style={styles.bottomControls}>
         <SafeAreaView style={styles.controlsRow} edges={['bottom']}>
           {/* Library picker */}
-          <TouchableOpacity style={styles.libraryBtn} onPress={handleLibraryPick}>
+          <TouchableOpacity
+            style={styles.libraryBtn}
+            onPress={handleLibraryPick}
+            accessibilityRole="button"
+            accessibilityLabel="Open photo library"
+          >
             <Text style={styles.libraryBtnText}>Library</Text>
           </TouchableOpacity>
 
@@ -293,6 +355,9 @@ export default function CaptureScreen() {
             style={[styles.shutter, isCapturing && styles.shutterActive]}
             onPress={handleCapture}
             disabled={isCapturing}
+            accessibilityRole="button"
+            accessibilityLabel="Capture photo"
+            accessibilityState={{ disabled: isCapturing }}
             activeOpacity={0.85}
           >
             <View style={styles.shutterInner} />
