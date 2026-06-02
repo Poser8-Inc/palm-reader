@@ -29,6 +29,7 @@ import Purchases from 'react-native-purchases'
 import { Colors, Spacing, BorderRadius, Typography } from '../constants/theme'
 import { useStore } from '../lib/store'
 import { log } from '../lib/log'
+import { hasPremiumAccess } from '../lib/entitlements'
 
 const { width: W, height: H } = Dimensions.get('window')
 
@@ -183,8 +184,7 @@ export default function CaptureScreen() {
     let isPremium = false
     try {
       const customerInfo = await Purchases.getCustomerInfo()
-      // TODO(IAP-CONFIG-002): verify 'premium' is the entitlement ID in RevenueCat dashboard.
-      isPremium = !!customerInfo.entitlements.active['premium']
+      isPremium = hasPremiumAccess(customerInfo)
     } catch (err) {
       log.warn('[rc][palm][capture] getCustomerInfo failed:', err)
       // isPremium stays false (defensive). Don't reroute to paywall on transient RC errors —

@@ -27,6 +27,7 @@ import Purchases, { type PurchasesPackage } from 'react-native-purchases'
 import { Colors, Spacing, BorderRadius, Typography } from '../constants/theme'
 import { useStore } from '../lib/store'
 import { log } from '../lib/log'
+import { hasPremiumAccess } from '../lib/entitlements'
 
 const { width: W } = Dimensions.get('window')
 
@@ -155,8 +156,7 @@ export default function PaywallScreen() {
     setIsPurchasing(true)
     try {
       const { customerInfo } = await Purchases.purchasePackage(pkg)
-      // TODO(IAP-CONFIG-002): verify 'premium' is the entitlement ID in RevenueCat dashboard.
-      if (customerInfo.entitlements.active['premium']) {
+      if (hasPremiumAccess(customerInfo)) {
         setPaywallVisible(false)
         router.replace('/')
         Alert.alert('Welcome to Premium!', 'You now have unlimited palm readings.')
@@ -177,8 +177,7 @@ export default function PaywallScreen() {
     setIsRestoring(true)
     try {
       const customerInfo = await Purchases.restorePurchases()
-      // TODO(IAP-CONFIG-002): verify 'premium' is the entitlement ID in RevenueCat dashboard.
-      if (customerInfo.entitlements.active['premium']) {
+      if (hasPremiumAccess(customerInfo)) {
         setPaywallVisible(false)
         router.replace('/')
         Alert.alert('Purchases Restored', 'Your premium access has been restored.')
