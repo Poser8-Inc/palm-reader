@@ -49,59 +49,25 @@ export interface UserProfile {
   created_at: string
 }
 
-// Helpers
-export async function getReadingsCount(userId: string): Promise<number> {
-  const { count, error } = await supabase
-    .from('readings')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', userId)
-
-  if (error) {
-    log.error('[supabase] getReadingsCount error:', error.message)
-    return 0
-  }
-  return count ?? 0
+// Helpers — STUBBED. Neither `profiles` nor `readings` exists in the
+// Suite-shared Supabase project (jpwmfztcprbwkpbkyiqm); both return 404
+// on every page load. Palm Reader is being retired into Soma's
+// multi-modal Body Reading product per Phase B, but it's still on the
+// App Store and Play Store as of 2026-06-03 — real users were getting
+// background 404 noise. Stub the 4 helpers to safe defaults; the public
+// API surface is preserved.
+export async function getReadingsCount(_userId: string): Promise<number> {
+  return 0
 }
 
-export async function getUserProfile(userId: string): Promise<UserProfile | null> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .single()
-
-  if (error) {
-    log.error('[supabase] getUserProfile error:', error.message)
-    return null
-  }
-  return data
+export async function getUserProfile(_userId: string): Promise<UserProfile | null> {
+  return null
 }
 
-export async function getPastReadings(userId: string, limit = 20): Promise<Reading[]> {
-  const { data, error } = await supabase
-    .from('readings')
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(limit)
-
-  if (error) {
-    log.error('[supabase] getPastReadings error:', error.message)
-    return []
-  }
-  return data ?? []
+export async function getPastReadings(_userId: string, _limit = 20): Promise<Reading[]> {
+  return []
 }
 
-export async function saveReading(reading: Omit<Reading, 'id' | 'created_at'>): Promise<Reading | null> {
-  const { data, error } = await supabase
-    .from('readings')
-    .insert(reading)
-    .select()
-    .single()
-
-  if (error) {
-    log.error('[supabase] saveReading error:', error.message)
-    return null
-  }
-  return data
+export async function saveReading(_reading: Omit<Reading, 'id' | 'created_at'>): Promise<Reading | null> {
+  return null
 }
