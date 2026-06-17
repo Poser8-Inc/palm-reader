@@ -11,6 +11,7 @@ import Purchases, { LOG_LEVEL } from 'react-native-purchases'
 import { log } from '../lib/log'
 import { supabase } from '../lib/supabase'
 import { useStore } from '../lib/store'
+import { TemplariMount } from '../lib/TemplariMount'
 
 export default function RootLayout() {
   const setUserId = useStore((s) => s.setUserId)
@@ -71,6 +72,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: Colors.bg }}>
       <SafeAreaProvider>
         <StatusBar style="light" backgroundColor={Colors.bg} />
+        <TemplariMount />
         <Stack
           screenOptions={{
             headerShown: false,
@@ -83,6 +85,9 @@ export default function RootLayout() {
           <Stack.Screen name="reading" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="history" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="paywall" options={{ animation: 'slide_from_bottom', presentation: 'modal' }} />
+          <Stack.Screen name="account" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="templari-sign-in" options={{ animation: 'slide_from_bottom', presentation: 'modal' }} />
+          <Stack.Screen name="auth/callback" options={{ animation: 'fade' }} />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>
