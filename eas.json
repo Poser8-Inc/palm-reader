@@ -10,18 +10,25 @@
     },
     "preview": {
       "distribution": "internal",
-      "channel": "preview"
+      "channel": "preview",
+      "env": {
+        "EXPO_PUBLIC_REVENUECAT_IOS_KEY": "appl_WKGbFzWrqtRwohRcTqplSmOtKze",
+        "EXPO_PUBLIC_REVENUECAT_ANDROID_KEY": "goog_xagpoHjxRBqEROMFASlwKdfbazn"
+      }
     },
     "production": {
       "channel": "production",
       "autoIncrement": true,
-      "ios": { "image": "macos-sequoia-15.6-xcode-26.0" },
+      "ios": {
+        "image": "macos-sequoia-15.6-xcode-26.0"
+      },
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://jpwmfztcprbwkpbkyiqm.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_iYwvySa6X352tyIpCby5UQ_oiAp60z_",
         "EXPO_PUBLIC_REVENUECAT_IOS_KEY": "appl_WKGbFzWrqtRwohRcTqplSmOtKze",
         "EXPO_PUBLIC_REVENUECAT_ANDROID_KEY": "goog_xagpoHjxRBqEROMFASlwKdfbazn",
-        "EXPO_PUBLIC_PALM_ORACLE_URL": "https://jpwmfztcprbwkpbkyiqm.supabase.co/functions/v1/palm-oracle"
+        "EXPO_PUBLIC_PALM_ORACLE_URL": "https://jpwmfztcprbwkpbkyiqm.supabase.co/functions/v1/palm-oracle",
+        "EXPO_PUBLIC_TEMPLARI_ID_ENABLED": "true"
       }
     }
   },
