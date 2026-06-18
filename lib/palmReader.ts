@@ -2,6 +2,7 @@ import * as ImageManipulator from 'expo-image-manipulator'
 import { useStore, type ReadingSection } from './store'
 import { log } from './log'
 import { getAccessToken } from './supabase'
+import { parsePalmFeatures, schematicPalm } from './palmFeatures'
 
 const PALM_ORACLE_URL = process.env.EXPO_PUBLIC_PALM_ORACLE_URL
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
@@ -87,6 +88,19 @@ function stripMarkdownHeaders(text: string): string {
     .trim()
 }
 
+// Strip the feature-coordinate JSON block (and its `## Feature Coordinates`
+// header, if present) from the response. The streaming path already skips it
+// via a sentinel, but the post-stream reconciler needs the same treatment or
+// it dumps the JSON into whatever section was last detected (usually overall).
+function stripFeatureBlock(raw: string): string {
+  const fenceIdx = raw.search(/```/)
+  const headerIdx = raw.search(/^##\s*Feature Coordinates/m)
+  const candidates = [fenceIdx, headerIdx].filter((i) => i >= 0)
+  if (candidates.length === 0) return raw
+  const cutAt = Math.min(...candidates)
+  return raw.slice(0, cutAt)
+}
+
 // Parse raw reading text into structured sections
 export function parseReadingIntoSections(raw: string): Omit<ReadingResult, 'raw'> {
   const result: Omit<ReadingResult, 'raw'> = {
@@ -99,7 +113,7 @@ export function parseReadingIntoSections(raw: string): Omit<ReadingResult, 'raw'
   }
 
   // Split by double-newline or section headers
-  const lines = raw.split('\n')
+  const lines = stripFeatureBlock(raw).split('\n')
   let currentSection: ReadingSection['key'] | null = null
   const sectionBuffers: Partial<Record<ReadingSection['key'], string[]>> = {}
 
@@ -178,7 +192,7 @@ export async function readPalm(
       'apikey': SUPABASE_ANON_KEY,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ imageBase64 }),
+    body: JSON.stringify({ imageBase64, userId }),
   })
 
   if (!response.ok) {
@@ -226,13 +240,6 @@ export async function readPalm(
     throw new Error(userMessage)
   }
 
-  if (!response.body) {
-    throw new Error('No response body for streaming')
-  }
-
-  // Read the streaming response
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder('utf-8')
   let rawAccumulated = ''
   let currentSection: ReadingSection['key'] | null = null
   let sectionBuffer = ''
@@ -245,34 +252,76 @@ export async function readPalm(
     }
   }
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
+  const processLine = (line: string) => {
+    // Sentinel: once we see the Feature Coordinates marker or the start of a
+    // JSON code fence, stop appending to any displayed section. The JSON
+    // block at the tail of the response is parsed from rawAccumulated, but
+    // never shown to the user.
+    if (line.startsWith('## Feature Coordinates') || line.trimStart().startsWith('```')) {
+      if (currentSection && sectionBuffer.trim()) {
+        flushSection(currentSection, sectionBuffer)
+        sectionBuffer = ''
+      }
+      currentSection = null
+      return
+    }
 
-    const chunk = decoder.decode(value, { stream: true })
-    rawAccumulated += chunk
-
-    // Process chunk line by line to detect section boundaries
-    const lines = chunk.split('\n')
-    for (const line of lines) {
-      const detected = detectSection(line)
-      if (detected) {
-        // Flush previous section
-        if (currentSection && sectionBuffer.trim()) {
-          flushSection(currentSection, sectionBuffer)
-          sectionBuffer = ''
-        }
-        currentSection = detected
-        updateSection(currentSection, { isStreaming: true, isComplete: false })
-      } else if (currentSection) {
-        sectionBuffer += line + '\n'
-        // Stream partial content to store for live UI
-        const partial = stripMarkdownHeaders(sectionBuffer.trim())
-        if (partial) {
-          updateSection(currentSection, { content: partial, isStreaming: true })
-        }
+    const detected = detectSection(line)
+    if (detected) {
+      if (currentSection && sectionBuffer.trim()) {
+        flushSection(currentSection, sectionBuffer)
+        sectionBuffer = ''
+      }
+      currentSection = detected
+      updateSection(currentSection, { isStreaming: true, isComplete: false })
+    } else if (currentSection) {
+      sectionBuffer += line + '\n'
+      const partial = stripMarkdownHeaders(sectionBuffer.trim())
+      if (partial) {
+        updateSection(currentSection, { content: partial, isStreaming: true })
       }
     }
+  }
+
+  if (!response.body) {
+    // Some Android networks / RN 0.76 textStreaming opt-in return null body with 200 OK.
+    // Fall back to non-streaming: read the full text once, process as a single batch.
+    log.warn('[palmReader] response.body null — falling back to text()')
+    const fullText = await response.text()
+    if (!fullText) {
+      const msg = 'Something went wrong reading your palm. Please try again.'
+      setReadingError(msg)
+      setReadingStatus('error')
+      throw new Error('[palmReader] Empty response body')
+    }
+    rawAccumulated = fullText
+    for (const line of fullText.split('\n')) processLine(line)
+  } else {
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+
+    // Streaming reads arrive in arbitrary byte chunks; they almost never align
+    // to newline boundaries. If a section header like "## Overall Reading"
+    // straddles a chunk boundary, splitting each chunk on '\n' breaks the
+    // header into two non-matching fragments and the section is never detected
+    // (content gets misrouted into the previous section). Buffer partial lines
+    // across iterations so processLine only ever sees complete lines.
+    let leftover = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      const chunk = decoder.decode(value, { stream: true })
+      rawAccumulated += chunk
+
+      const combined = leftover + chunk
+      const lines = combined.split('\n')
+      leftover = lines.pop() ?? ''
+      for (const line of lines) processLine(line)
+    }
+
+    if (leftover) processLine(leftover)
   }
 
   // Flush last section
@@ -280,8 +329,32 @@ export async function readPalm(
     flushSection(currentSection, sectionBuffer)
   }
 
-  // Parse the full accumulated response into structured result
+  // Parse the full accumulated response into structured result.
   const parsed = parseReadingIntoSections(rawAccumulated)
+
+  // Reconciliation: backfill any store sections the streaming detector missed.
+  // The post-stream parser sees the full text and is authoritative; the
+  // streaming path can drop a section if its header straddled a chunk boundary
+  // (defense-in-depth on top of the leftover-buffering fix above).
+  for (const key of ['heart_line', 'head_line', 'life_line', 'fate_line', 'mounts', 'overall'] as const) {
+    const text = parsed[key]
+    if (text && text.trim()) {
+      updateSection(key, { content: text, isStreaming: false, isComplete: true })
+    }
+  }
+
+  // Parse the structured feature-coordinate block at the tail of the response.
+  // Falls back to a schematic right-hand layout if the analyzer omitted coords
+  // or emitted unparseable JSON.
+  const setFeatures = useStore.getState().setFeatures
+  try {
+    const features = parsePalmFeatures(rawAccumulated) ?? schematicPalm()
+    setFeatures(features)
+  } catch (err) {
+    log.warn('[palmReader] feature parse failed; using schematic:', err)
+    setFeatures(schematicPalm())
+  }
+
   const result: ReadingResult = { ...parsed, raw: rawAccumulated }
 
   setReadingStatus('complete')

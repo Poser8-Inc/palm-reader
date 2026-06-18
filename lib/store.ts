@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { Reading, UserProfile } from './supabase'
+import type { PalmFeatures, HandSide } from './palmFeatures'
 
 export interface ReadingSection {
   key: 'heart_line' | 'head_line' | 'life_line' | 'fate_line' | 'mounts' | 'overall'
@@ -38,6 +39,12 @@ export interface AppState {
   updateSection: (key: ReadingSection['key'], partial: Partial<ReadingSection>) => void
   resetReading: () => void
 
+  // Annotation overlay (vc=12 feature)
+  features: PalmFeatures | null
+  userHand: HandSide | null  // user override; null until the user touches L/R
+  setFeatures: (f: PalmFeatures | null) => void
+  setUserHand: (h: HandSide | null) => void
+
   // History
   history: Reading[]
   setHistory: (readings: Reading[]) => void
@@ -50,12 +57,16 @@ export interface AppState {
 
 const FREE_READINGS_LIMIT = 2
 
+// Section header colors are intentionally matched to the polyline colors in
+// components/PalmOverlay.tsx so the labels function as a legend for the
+// annotated palm above. The Mounts color is the average tone across the seven
+// mount swatches; Overall has no corresponding line and keeps its gold theme.
 const INITIAL_SECTIONS: ReadingSection[] = [
-  { key: 'heart_line', label: 'Heart Line', emoji: '♥', color: '#8B2439', content: '', isStreaming: false, isComplete: false },
-  { key: 'head_line', label: 'Head Line', emoji: '◈', color: '#D4A84B', content: '', isStreaming: false, isComplete: false },
-  { key: 'life_line', label: 'Life Line', emoji: '✦', color: '#2D4A3E', content: '', isStreaming: false, isComplete: false },
-  { key: 'fate_line', label: 'Fate Line', emoji: '★', color: '#6B4C8A', content: '', isStreaming: false, isComplete: false },
-  { key: 'mounts', label: 'The Mounts', emoji: '◉', color: '#4A6B8A', content: '', isStreaming: false, isComplete: false },
+  { key: 'heart_line', label: 'Heart Line', emoji: '♥', color: '#FF5C7A', content: '', isStreaming: false, isComplete: false },
+  { key: 'head_line', label: 'Head Line', emoji: '◈', color: '#4FB7FF', content: '', isStreaming: false, isComplete: false },
+  { key: 'life_line', label: 'Life Line', emoji: '✦', color: '#7BD389', content: '', isStreaming: false, isComplete: false },
+  { key: 'fate_line', label: 'Fate Line', emoji: '★', color: '#C792EA', content: '', isStreaming: false, isComplete: false },
+  { key: 'mounts', label: 'The Mounts', emoji: '◉', color: '#FFC93C', content: '', isStreaming: false, isComplete: false },
   { key: 'overall', label: 'Overall Reading', emoji: '✧', color: '#D4A84B', content: '', isStreaming: false, isComplete: false },
 ]
 
@@ -96,7 +107,15 @@ export const useStore = create<AppState>((set, get) => ({
       readingStatus: 'idle',
       readingError: null,
       capturedImageUri: null,
+      features: null,
+      userHand: null,
     }),
+
+  // Annotation overlay
+  features: null,
+  userHand: null,
+  setFeatures: (f) => set({ features: f }),
+  setUserHand: (h) => set({ userHand: h }),
 
   // History
   history: [],
