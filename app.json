@@ -2,15 +2,18 @@
   "expo": {
     "name": "Palm Reader",
     "slug": "palm-reader",
-    "version": "1.0.0",
+    "version": "1.0.6",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "app.templari.palmreader",
+      "buildNumber": "31",
       "supportsTablet": false,
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Palm Reader uses the camera to photograph the lines on your palm so we can identify and interpret the four major lines (Life, Head, Heart, Fate). For example, hold your dominant hand flat in front of the camera with your palm facing up.",
+        "NSPhotoLibraryUsageDescription": "Palm Reader can analyze an existing palm photograph from your photo library. For example, choose a clear photo of your dominant hand's palm and Palm Reader will identify the major lines."
       }
     },
     "android": {
@@ -20,8 +23,7 @@
         "backgroundColor": "#0A0B0F"
       },
       "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.CAMERA"
       ]
     },
     "plugins": [
@@ -32,8 +34,8 @@
         {
           "android": {
             "kotlinVersion": "1.9.25",
-            "targetSdkVersion": 35,
-            "compileSdkVersion": 35
+            "targetSdkVersion": 36,
+            "compileSdkVersion": 36
           }
         }
       ],

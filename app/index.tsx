@@ -203,6 +203,14 @@ export default function HomeScreen() {
         {/* Header row */}
         <Animated.View entering={FadeIn.delay(100)} style={styles.headerRow}>
           <TouchableOpacity
+            onPress={() => router.push('/account')}
+            style={styles.accountBtn}
+            accessibilityRole="link"
+            accessibilityLabel="Account and sync"
+          >
+            <Text style={styles.accountBtnText}>✦</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             onPress={() => router.push('/history')}
             style={styles.historyBtn}
             accessibilityRole="link"
@@ -310,9 +318,24 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     width: '100%',
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingTop: Spacing.sm,
     paddingBottom: Spacing.xs,
+  },
+  accountBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accountBtnText: {
+    color: Colors.primary,
+    fontSize: 18,
   },
   historyBtn: {
     paddingVertical: 6,
