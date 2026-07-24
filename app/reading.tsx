@@ -28,10 +28,16 @@ import * as Haptics from 'expo-haptics'
 import { Colors, Spacing, BorderRadius, Typography } from '../constants/theme'
 import { useStore, type ReadingSection } from '../lib/store'
 import { readPalm, createThumbnail } from '../lib/palmReader'
+import { PalmOverlay } from '../components/PalmOverlay'
+import { mirrorFeatures, type HandSide } from '../lib/palmFeatures'
 import { saveReading } from '../lib/supabase'
 import { log } from '../lib/log'
 
 const { width: W } = Dimensions.get('window')
+
+// Hero annotated-palm image is rendered at a constant aspect-square size
+// derived from screen width minus padding. Skia overlay matches this size 1:1.
+const ANNOTATED_SIZE = Math.min(W - 32, 360)
 
 // Animated mystical spiral loader using Skia
 function MysticalLoader({ visible }: { visible: boolean }) {
@@ -134,7 +140,9 @@ function SectionCard({ section, index }: { section: ReadingSection; index: numbe
     >
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionEmoji]}>{section.emoji}</Text>
-        <Text style={[styles.sectionLabel, { color: section.color }]}>{section.label}</Text>
+        <View style={[styles.sectionLabelWrap, { borderBottomColor: section.color }]}>
+          <Text style={[styles.sectionLabel, { color: section.color }]}>{section.label}</Text>
+        </View>
         {section.isStreaming && !section.isComplete && (
           <View style={[styles.streamingDot, { backgroundColor: section.color }]} />
         )}
@@ -167,7 +175,26 @@ export default function ReadingScreen() {
     setReadingStatus,
     setReadingError,
     setActiveReading,
+    features,
+    userHand,
+    setUserHand,
   } = useStore()
+
+  // Compute the features actually rendered: if the user has overridden the
+  // analyzer's hand-detection and the two disagree, mirror the coordinates
+  // around the vertical centerline so the overlay matches the photo.
+  const effectiveFeatures = (() => {
+    if (!features) return null
+    if (!userHand || userHand === features.hand) return features
+    if (userHand === 'unknown') return features
+    return mirrorFeatures(features)
+  })()
+
+  // The hand currently shown as selected in the L/R UI. Prefer user override,
+  // then analyzer detection. Stays null when both are unknown so neither
+  // selector is filled.
+  const selectedHand: HandSide | null =
+    userHand ?? (features?.hand === 'unknown' ? null : (features?.hand ?? null))
 
   const scrollRef = useRef<ScrollView>(null)
   const hasStarted = useRef(false)
@@ -201,11 +228,19 @@ export default function ReadingScreen() {
   const startReading = async () => {
     if (!capturedImageUri) return
 
+    // Block calls without a real Supabase user — auth bootstrap auto-creates
+    // an anonymous user on app launch, so userId being null here means the
+    // session hasn't settled yet. The endpoint refuses anonymous queries, so
+    // surfacing a clear error beats hammering the API with a placeholder.
+    if (!userId) {
+      const msg = 'Still setting up your account — try again in a moment.'
+      setReadingError(msg)
+      setReadingStatus('error')
+      return
+    }
+
     try {
-      const result = await readPalm(
-        capturedImageUri,
-        userId ?? 'anonymous',
-      )
+      const result = await readPalm(capturedImageUri, userId)
 
       // Haptic feedback when complete
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
@@ -289,16 +324,76 @@ export default function ReadingScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Palm thumbnail */}
+        {/* Annotated palm — hero image with feature overlay + L/R selector */}
         {capturedImageUri && (
-          <Animated.View entering={FadeIn} style={styles.thumbnailRow}>
-            <Image
-              source={{ uri: capturedImageUri }}
-              style={styles.thumbnail}
-              resizeMode="cover"
-            />
-            <View style={styles.thumbnailMeta}>
-              <Text style={styles.thumbnailTitle}>Your Palm</Text>
+          <Animated.View entering={FadeIn} style={styles.annotatedBlock}>
+            <View style={styles.annotatedFrame}>
+              <Image
+                source={{ uri: capturedImageUri }}
+                style={styles.annotatedImage}
+                resizeMode="cover"
+              />
+              <PalmOverlay
+                width={ANNOTATED_SIZE}
+                height={ANNOTATED_SIZE}
+                features={effectiveFeatures}
+              />
+            </View>
+
+            {/* L | R selector — labels at the extreme left and right edges */}
+            <View style={styles.handSelectorRow}>
+              <TouchableOpacity
+                style={styles.handSelectorHit}
+                onPress={() => setUserHand('left')}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: selectedHand === 'left' }}
+                accessibilityLabel="Left hand"
+              >
+                <View
+                  style={[
+                    styles.handSelectorCircle,
+                    selectedHand === 'left' && styles.handSelectorCircleActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.handSelectorLetter,
+                      selectedHand === 'left' && styles.handSelectorLetterActive,
+                    ]}
+                  >
+                    L
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <View style={styles.handSelectorSpacer} />
+
+              <TouchableOpacity
+                style={styles.handSelectorHit}
+                onPress={() => setUserHand('right')}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: selectedHand === 'right' }}
+                accessibilityLabel="Right hand"
+              >
+                <View
+                  style={[
+                    styles.handSelectorCircle,
+                    selectedHand === 'right' && styles.handSelectorCircleActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.handSelectorLetter,
+                      selectedHand === 'right' && styles.handSelectorLetterActive,
+                    ]}
+                  >
+                    R
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.annotatedMetaRow}>
               <Text style={styles.thumbnailDate}>
                 {new Date().toLocaleDateString('en-US', {
                   month: 'long',
@@ -357,6 +452,18 @@ export default function ReadingScreen() {
         {readingSections.map((section, i) => (
           <SectionCard key={section.key} section={section} index={i} />
         ))}
+
+        {/* Entertainment disclaimer (Apple 1.1.6 alignment). Always visible
+            alongside the reading itself, not buried in legal pages. */}
+        {(isStreaming || isComplete) && completedSections.length > 0 && (
+          <View style={styles.disclaimerBlock}>
+            <Text style={styles.disclaimerText}>
+              Palm Reader is a reflective entertainment experience. Palmistry
+              has no scientific validation — treat these insights as creative
+              prompts for self-reflection, not predictions.
+            </Text>
+          </View>
+        )}
 
         {/* Complete footer */}
         {isComplete && (
@@ -459,6 +566,69 @@ const styles = StyleSheet.create({
   thumbnailTitle: {
     ...Typography.h3,
     color: Colors.text,
+  },
+  // ── Annotated palm hero (vc=12) ─────────────────────────────────────────
+  annotatedBlock: {
+    marginBottom: Spacing.lg,
+    alignItems: 'center',
+  },
+  annotatedFrame: {
+    width: ANNOTATED_SIZE,
+    height: ANNOTATED_SIZE,
+    borderRadius: BorderRadius.lg,
+    backgroundColor: Colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  annotatedImage: {
+    width: ANNOTATED_SIZE,
+    height: ANNOTATED_SIZE,
+  },
+  // Hand selector — L on extreme left, R on extreme right of the strip
+  handSelectorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: ANNOTATED_SIZE,
+    marginTop: Spacing.md,
+    paddingHorizontal: 4,
+  },
+  handSelectorHit: {
+    padding: 12, // generous tap target
+  },
+  handSelectorSpacer: {
+    flex: 1,
+  },
+  handSelectorCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  handSelectorCircleActive: {
+    borderColor: Colors.primary,
+    backgroundColor: 'rgba(212,168,75,0.18)',
+  },
+  handSelectorLetter: {
+    ...Typography.h3,
+    color: Colors.textMuted,
+    fontWeight: '700',
+  },
+  handSelectorLetterActive: {
+    color: Colors.primary,
+  },
+  annotatedMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
   },
   thumbnailDate: {
     ...Typography.bodySmall,
@@ -576,9 +746,14 @@ const styles = StyleSheet.create({
   sectionEmoji: {
     fontSize: 16,
   },
+  sectionLabelWrap: {
+    flex: 1,
+    borderBottomWidth: 2,
+    paddingBottom: 2,
+    alignSelf: 'flex-start',
+  },
   sectionLabel: {
     ...Typography.labelLarge,
-    flex: 1,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
@@ -599,6 +774,21 @@ const styles = StyleSheet.create({
   },
   cursor: {
     opacity: 0.8,
+  },
+  // Disclaimer block (Apple 1.1.6 compliance)
+  disclaimerBlock: {
+    marginTop: Spacing.lg,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderLeftWidth: 2,
+    borderLeftColor: Colors.primary,
+    opacity: 0.65,
+  },
+  disclaimerText: {
+    fontSize: 12,
+    color: Colors.text,
+    lineHeight: 17,
+    fontStyle: 'italic',
   },
   // Complete footer
   completeFooter: {

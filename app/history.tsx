@@ -167,9 +167,13 @@ export default function HistoryScreen() {
   }, [])
 
   const loadHistory = async () => {
+    if (!userId) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     try {
-      const readings = await getPastReadings(userId ?? 'anonymous')
+      const readings = await getPastReadings(userId)
       setHistory(readings)
     } catch (err) {
       log.error('[history] Load failed:', err)

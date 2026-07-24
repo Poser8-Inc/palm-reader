@@ -176,7 +176,7 @@ export default function PaywallScreen() {
   const handleRestore = async () => {
     setIsRestoring(true)
     try {
-      const { customerInfo } = await Purchases.restorePurchases()
+      const customerInfo = await Purchases.restorePurchases()
       if (hasPremiumAccess(customerInfo)) {
         setPaywallVisible(false)
         router.replace('/')
